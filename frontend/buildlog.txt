@@ -1,0 +1,32 @@
+
+> smart-tourist-frontend@1.0.0 build
+> vite build
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vite.config.js:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+7:34:12 pm [vite] warning: `esbuild` option was specified by "vite:react-babel" plugin. This option is deprecated, please use `oxc` instead.
+`optimizeDeps.rollupOptions` / `ssr.optimizeDeps.rollupOptions` is deprecated. Use `optimizeDeps.rolldownOptions` instead. Note that this option may be set by a plugin. Set VITE_DEPRECATION_TRACE=1 to see where it is called.
+[vite:react-babel] We recommend switching to `@vitejs/plugin-react-oxc` for improved performance. More information at https://vite.dev/rolldown
+[36mvite v8.2.0 [32mbuilding client environment for production...[36m[39m
+[2K
+(node:2076) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/Rohit/OneDrive/Desktop/smart-tourist-system/frontend/postcss.config.js?t=1786197852189 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\Rohit\OneDrive\Desktop\smart-tourist-system\frontend\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+transforming...Γ£ô 1589 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.81 kB Γöé gzip:   0.50 kB
+dist/assets/index-Bw41xonW.css   44.79 kB Γöé gzip:  12.10 kB
+dist/assets/index-BmvFo8nU.js   411.17 kB Γöé gzip: 126.78 kB
+
+[32mΓ£ô built in 14.95s[39m
+[PLUGIN_TIMINGS] Your build spent 19% of 14.9s inside plugin hooks (2.8s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vite:build-html transform (13%, 2.0s, 1 call)
+Those rows are 13% of the build; the rest of the 19% is below.
+Not measurable ΓÇö 1 hook whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - vite:css transform (2 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
