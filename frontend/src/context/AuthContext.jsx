@@ -12,6 +12,20 @@ const normalizeUser = (user) => ({
   email: user.email,
 });
 
+// FastAPI errors: detail is a string for HTTPException, but an array of
+// validation objects for 422s. Flatten both into a human-readable message.
+const extractErrorMessage = (err, fallback) => {
+  const detail = err.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0];
+    if (first?.msg) {
+      return String(first.msg).replace(/^Value error,\s*/i, '');
+    }
+  }
+  return fallback;
+};
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [tripsCount, setTripsCount] = useState(0);
@@ -73,39 +87,44 @@ export function AuthProvider({ children }) {
       const res = await axios.post(
         `${API_BASE_URL}/api/auth/login`,
         { email, password },
-        { withCredentials: true, timeout: 4000 }
+        { withCredentials: true, timeout: 8000 }
       );
       setCurrentUser(normalizeUser(res.data.user));
       await refreshTripsCount();
       return { ok: true, user: res.data.user };
     } catch (err) {
-      const msg =
-        err.response?.data?.detail || 'Backend is unreachable. Please start it and try again.';
-      return { ok: false, error: msg };
+      return {
+        ok: false,
+        error: extractErrorMessage(
+          err,
+          'Backend is unreachable. Please start it and try again.'
+        ),
+      };
     } finally {
       setAuthLoading(false);
     }
   }, [refreshTripsCount]);
 
+  // Creates the account only. The user is NOT logged in automatically;
+  // the caller must route to /login for an explicit sign-in.
   const signup = useCallback(async (name, email, password) => {
     setAuthLoading(true);
     try {
-      const res = await axios.post(
+      await axios.post(
         `${API_BASE_URL}/api/auth/signup`,
-        { name, email, password },
-        { withCredentials: true, timeout: 6000 }
+        { full_name: name, email, password },
+        { withCredentials: true, timeout: 8000 }
       );
-      setCurrentUser(normalizeUser(res.data.user));
-      await refreshTripsCount();
-      return { ok: true, user: res.data.user };
+      return { ok: true };
     } catch (err) {
-      const msg =
-        err.response?.data?.detail || 'Signup failed. Please check your details and try again.';
-      return { ok: false, error: msg };
+      return {
+        ok: false,
+        error: extractErrorMessage(err, 'Signup failed. Please check your details and try again.'),
+      };
     } finally {
       setAuthLoading(false);
     }
-  }, [refreshTripsCount]);
+  }, []);
 
   const logout = useCallback(async () => {
     try {

@@ -1,19 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Route,
-  MapPin,
-  Users,
-  CheckCircle,
-  Plus,
-  Trash2,
-  Navigation,
-  Sparkles,
-  Loader2,
-  AlertTriangle,
-  IndianRupee,
-  Calendar,
-  RefreshCw,
+  Route, MapPin, Users, CheckCircle, Plus, Trash2, Navigation,
+  Sparkles, Loader2, AlertTriangle, IndianRupee, Calendar,
+  RefreshCw, Bookmark, Compass, ArrowRight, Heart, Info,
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
@@ -24,61 +14,90 @@ import ValidationMessage from '../components/ValidationMessage';
 import LocationRecommendationGroup from '../components/LocationRecommendationGroup';
 import PlaceDetailsModal from '../components/PlaceDetailsModal';
 import TripTimeline from '../components/TripTimeline';
+import PageHeader from '../components/PageHeader';
+import LoadingState from '../components/LoadingState';
+import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
 
-const INTEREST_OPTIONS = [
-  'History', 'Heritage', 'Nature', 'Waterfalls', 'Temples', 'Beaches',
-  'Trekking', 'Wildlife', 'Food', 'Shopping', 'Adventure', 'Museums',
-  'Spiritual', 'Hill Stations',
+const TRAVEL_STYLES = [
+  { id: 'Relaxed', label: 'Relaxed', desc: 'Scenic pace, gentle visits' },
+  { id: 'Adventure', label: 'Adventure', desc: 'Treks, wildlife & outdoor thrills' },
+  { id: 'Cultural', label: 'Cultural', desc: 'History, living arts & traditions' },
+  { id: 'Family', label: 'Family', desc: 'Comfortable, kid & elder friendly' },
+  { id: 'Spiritual', label: 'Spiritual', desc: 'Sacred temples & peaceful retreats' },
+  { id: 'Nature', label: 'Nature', desc: 'Waterfalls, ghats & misty hills' },
+  { id: 'Budget', label: 'Budget', desc: 'Smart value, authentic stays' },
+  { id: 'Luxury', label: 'Luxury', desc: 'Premium resorts & curated comfort' },
 ];
 
-const CATEGORY_OPTIONS = [
-  'Heritage', 'Temple', 'Nature', 'Waterfall', 'Wildlife', 'Beach',
-  'Trekking', 'Museum', 'Shopping', 'Food', 'Adventure', 'Garden',
-  'Monument', 'Hill Station',
+const INTERESTS = [
+  'Heritage',
+  'Nature',
+  'Wildlife',
+  'Food',
+  'Beaches',
+  'Adventure',
+  'Culture',
+  'Spiritual',
 ];
 
-const ACTIVITY_OPTIONS = [
-  'Photography', 'Trekking', 'Temple Darshan', 'Waterfall Viewing', 'Shopping',
-  'Street Food', 'Wildlife Safari', 'Boating', 'Camping', 'Sightseeing',
-];
+const POPULAR_START_CITIES = ['Bengaluru', 'Mysuru', 'Mangaluru', 'Hubballi', 'Belagavi'];
+const POPULAR_DESTINATIONS = ['Mysuru', 'Hampi', 'Gokarna', 'Chikkamagaluru', 'Coorg', 'Udupi', 'Badami'];
 
-const UNAVAILABLE_MSG = 'Recommendation service temporarily unavailable.';
-const FIELD_ORDER = ['startLocation', 'destination', 'travelers', 'budget', 'startDate', 'endDate', 'interests', 'categories', 'activities'];
+const UNAVAILABLE_MSG = 'Recommendation service temporarily unavailable. Please try again.';
 
-const PlanTrip = () => {
+const dateFromISO = (iso) => {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+export default function PlanTrip() {
   const navigate = useNavigate();
   const { refreshTripsCount } = useAuth();
-  const { setTripData, draftTrip, clearDraftTrip } = useTrip();
-  const [isPlanGenerated, setIsPlanGenerated] = useState(false);
-  const [selectedPlaces, setSelectedPlaces] = useState([]);
+  const { setTripData, draftTrip, clearDraftTrip, planner, updatePlanner, clearPlanner } = useTrip();
 
-  // Input form state
-  const [startLocation, setStartLocation] = useState('Bengaluru');
-  const [destination, setDestination] = useState('Mysuru');
-  const [stops, setStops] = useState([]);
+  // Form State
+  const [startLocation, setStartLocation] = useState(planner.startLocation ?? 'Bengaluru');
+  const [destination, setDestination] = useState(planner.destination ?? 'Mysuru');
+  const [stops, setStops] = useState(planner.stops || []);
   const [newStop, setNewStop] = useState('');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [budget, setBudget] = useState(18000);
-  const [travelers, setTravelers] = useState(2);
-  const [durationDays, setDurationDays] = useState('');
-  const [interests, setInterests] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [activities, setActivities] = useState([]);
+  const [startDate, setStartDate] = useState(() => dateFromISO(planner.startDate));
+  const [endDate, setEndDate] = useState(() => dateFromISO(planner.endDate));
+  const [budget, setBudget] = useState(planner.budget ?? 15000);
+  const [travelers, setTravelers] = useState(planner.travelers ?? 2);
+  const [travelStyle, setTravelStyle] = useState(planner.travelerType || 'Cultural');
+  const [durationDays, setDurationDays] = useState(planner.durationDays ?? '');
+  const [interests, setInterests] = useState(planner.interests?.length ? planner.interests : ['Heritage', 'Culture']);
 
-  // Load a saved trip into the planner (from "Edit in Planner" on TripDetail).
+  // Results State
+  const [isPlanGenerated, setIsPlanGenerated] = useState(Boolean(planner.isPlanGenerated));
+  const [selectedPlaces, setSelectedPlaces] = useState(planner.selectedPlaces || []);
+  const [groupedRecommendations, setGroupedRecommendations] = useState(planner.groupedRecommendations || []);
+  const [generatedItinerary, setGeneratedItinerary] = useState(planner.itinerary || null);
+  const [itineraryStats, setItineraryStats] = useState(planner.stats || null);
+
+  // Status & Modal State
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const [loadingItinerary, setLoadingItinerary] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [itineraryError, setItineraryError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [detailsRec, setDetailsRec] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  // Restore Draft Trip from other pages (e.g. from TripDetail "Edit")
   useEffect(() => {
     if (!draftTrip) return;
     setStartLocation(draftTrip.start_location || '');
     setDestination(draftTrip.destination || '');
     setStops(draftTrip.stops || []);
-    setBudget(draftTrip.budget ?? 18000);
+    setBudget(draftTrip.budget ?? 15000);
     setTravelers(draftTrip.travelers ?? 2);
     if (draftTrip.start_date) setStartDate(new Date(`${draftTrip.start_date}T00:00:00`));
     if (draftTrip.end_date) setEndDate(new Date(`${draftTrip.end_date}T00:00:00`));
-    setInterests(draftTrip.interests || []);
-    setCategories(draftTrip.categories || []);
-    setActivities(draftTrip.activities || []);
+    setInterests(draftTrip.interests || ['Heritage', 'Culture']);
+    if (draftTrip.traveler_type) setTravelStyle(draftTrip.traveler_type);
     setSelectedPlaces(
       (draftTrip.selected_places || []).map((p) => ({
         id: p.id || p.name,
@@ -99,28 +118,37 @@ const PlanTrip = () => {
     clearDraftTrip();
   }, [draftTrip, clearDraftTrip]);
 
-  // Validation
-  const [errors, setErrors] = useState({});
-
-  // Results state
-  const [recommendations, setRecommendations] = useState([]);
-  const [groupedRecommendations, setGroupedRecommendations] = useState([]);
-  const [loadingPlaces, setLoadingPlaces] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [generatedItinerary, setGeneratedItinerary] = useState(null);
-  const [itineraryStats, setItineraryStats] = useState(null);
-  const [loadingItinerary, setLoadingItinerary] = useState(false);
-  const [itineraryError, setItineraryError] = useState('');
-  const [detailsRec, setDetailsRec] = useState(null);
-  const [saveError, setSaveError] = useState('');
+  // Sync back to planner context for reload resilience
+  useEffect(() => {
+    updatePlanner({
+      startLocation,
+      destination,
+      stops,
+      startDate: toISODate(startDate),
+      endDate: toISODate(endDate),
+      budget,
+      travelers,
+      travelerType: travelStyle,
+      durationDays,
+      interests,
+      isPlanGenerated,
+      groupedRecommendations,
+      selectedPlaces,
+      itinerary: generatedItinerary,
+      stats: itineraryStats,
+    });
+  }, [
+    startLocation, destination, stops, startDate, endDate, budget, travelers,
+    travelStyle, durationDays, interests, isPlanGenerated, groupedRecommendations,
+    selectedPlaces, generatedItinerary, itineraryStats, updatePlanner,
+  ]);
 
   const tripLocations = useMemo(() => {
-    const ordered = [
+    return [
       startLocation.trim(),
       ...stops.map((s) => s.trim()).filter(Boolean),
       destination.trim(),
     ].filter(Boolean);
-    return ordered;
   }, [startLocation, stops, destination]);
 
   const effectiveDuration = useMemo(() => {
@@ -133,88 +161,148 @@ const PlanTrip = () => {
     return 3;
   }, [durationDays, startDate, endDate]);
 
-  const clearFieldError = (field) => {
-    setErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
+  const handleStartDateChange = (date) => {
+    setStartDate(date);
+    if (date && durationDays) {
+      const days = parseInt(durationDays, 10);
+      if (!isNaN(days) && days > 0) {
+        const nextEnd = new Date(date.getTime() + (days - 1) * 24 * 60 * 60 * 1000);
+        setEndDate(nextEnd);
+        return;
+      }
+    }
+    if (date && endDate && endDate < date) {
+      setEndDate(date);
+    }
+  };
+
+  const handleEndDateChange = (date) => {
+    setEndDate(date);
+    if (startDate && date && date >= startDate) {
+      const diffMs = date.getTime() - startDate.getTime();
+      const nights = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      const days = nights + 1;
+      setDurationDays(String(days));
+    }
+  };
+
+  const handleDurationDaysChange = (val) => {
+    setDurationDays(val);
+    const d = parseInt(val, 10);
+    if (!isNaN(d) && d > 0 && startDate) {
+      const nextEnd = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+      setEndDate(nextEnd);
+    }
+  };
+
+  const toggleInterest = (item) => {
+    setInterests((prev) =>
+      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
+    );
+    if (errors.interests) {
+      setErrors((prev) => ({ ...prev, interests: null }));
+    }
+  };
+
+  const handleAddStop = () => {
+    const s = newStop.trim();
+    if (!s) return;
+    if (!stops.includes(s)) {
+      setStops((prev) => [...prev, s]);
+    }
+    setNewStop('');
+  };
+
+  const handleRemoveStop = (index) => {
+    setStops((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleNewTrip = () => {
+    if (!window.confirm('Start a new journey plan? This resets the form and clear the current plan.')) {
+      return;
+    }
+    clearPlanner();
+    setStartLocation('Bengaluru');
+    setDestination('Mysuru');
+    setStops([]);
+    setNewStop('');
+    setStartDate(null);
+    setEndDate(null);
+    setBudget(15000);
+    setTravelers(2);
+    setTravelStyle('Cultural');
+    setDurationDays('');
+    setInterests(['Heritage', 'Culture']);
+    setIsPlanGenerated(false);
+    setSelectedPlaces([]);
+    setGroupedRecommendations([]);
+    setGeneratedItinerary(null);
+    setItineraryStats(null);
+    setErrorMessage('');
+    setItineraryError('');
+    setSaveError('');
+    setErrors({});
   };
 
   const validate = () => {
     const errs = {};
-
-    if (!String(startLocation).trim()) errs.startLocation = 'Starting location is required.';
-
-    if (!String(destination).trim()) errs.destination = 'Destination is required.';
-
-    const travelersStr = String(travelers).trim();
-    const travelersNum = Number(travelers);
-    if (travelersStr === '') {
-      errs.travelers = 'Number of travelers is required.';
-    } else if (Number.isNaN(travelersNum)) {
-      errs.travelers = 'Travelers must be a number.';
-    } else if (travelersNum < 1) {
-      errs.travelers = 'Travelers must be at least 1.';
-    }
-
-    const budgetStr = String(budget).trim();
-    const budgetNum = Number(budget);
-    if (budgetStr === '') {
-      errs.budget = 'Budget is required.';
-    } else if (Number.isNaN(budgetNum) || budgetNum <= 0) {
-      errs.budget = 'Budget must be a valid positive number.';
-    }
-
-    if (!startDate) {
-      errs.startDate = 'Start Date is required.';
-    } else if (toISODate(startDate) < toISODate(new Date())) {
-      errs.startDate = 'Start Date cannot be in the past.';
-    }
-
-    if (!endDate) {
-      errs.endDate = 'End date is required.';
-    } else if (startDate && toISODate(endDate) < toISODate(startDate)) {
-      errs.endDate = 'End date must be after the start date.';
-    }
-
-    if (interests.length === 0) {
-      errs.interests = 'Select at least one interest.';
-    }
-
-    if (categories.length === 0) {
-      errs.categories = 'Select at least one category.';
-    }
-
-    if (activities.length === 0) {
-      errs.activities = 'Select at least one activity.';
-    }
-
+    if (!startLocation.trim()) errs.startLocation = 'Starting location is required.';
+    if (!destination.trim()) errs.destination = 'Destination is required.';
+    if (!travelers || Number(travelers) < 1) errs.travelers = 'Must have at least 1 traveler.';
+    if (!budget || Number(budget) <= 0) errs.budget = 'Please specify a positive budget.';
+    if (interests.length === 0) errs.interests = 'Select at least one travel interest.';
     return errs;
   };
 
-  const scrollToFirstError = (errs) => {
-    const first = FIELD_ORDER.find((f) => errs[f]);
-    if (!first) return;
-    const el = document.getElementById(`plan-${first}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (typeof el.focus === 'function' && !el.disabled) el.focus();
+  const handleCreateTrip = async (e) => {
+    if (e) e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setLoadingPlaces(true);
+    setErrorMessage('');
+    setGeneratedItinerary(null);
+    setItineraryStats(null);
+    setItineraryError('');
+    setIsPlanGenerated(true);
+
+    const payload = {
+      destination: destination.trim(),
+      start_location: startLocation.trim(),
+      stops: stops.map((s) => s.trim()).filter(Boolean),
+      interests,
+      categories: interests,
+      activities: [],
+      budget: Number(budget) || 15000,
+      travelers: Number(travelers) || 2,
+      traveler_type: travelStyle.toLowerCase(),
+      duration_days: effectiveDuration,
+      start_date: toISODate(startDate),
+      end_date: toISODate(endDate),
+      top_n: 12,
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/planner/recommend`, payload);
+      setGroupedRecommendations(res.data.locations || []);
+      setSelectedPlaces([]);
+      setErrorMessage('');
+    } catch (err) {
+      console.error('Recommendation API error:', err);
+      setGroupedRecommendations([]);
+      setSelectedPlaces([]);
+      setErrorMessage(UNAVAILABLE_MSG);
+    } finally {
+      setLoadingPlaces(false);
     }
   };
 
-  const toggleChip = (list, setList, value, field) => {
-    setList((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
-    if (field) clearFieldError(field);
-  };
-
-  const handleToggleSelect = (rec, tripLocation = null) => {
+  const togglePlaceSelection = (rec, tripLocation = '') => {
     const place = rec.place || rec;
-    if (selectedPlaces.some((p) => p.id === (place.id || place.name))) {
-      setSelectedPlaces(selectedPlaces.filter((p) => p.id !== (place.id || place.name)));
+    const exists = selectedPlaces.some((p) => p.id === place.id);
+    if (exists) {
+      setSelectedPlaces((prev) => prev.filter((p) => p.id !== place.id));
     } else {
       const normalized = {
         id: place.id || place.name,
@@ -229,8 +317,6 @@ const PlanTrip = () => {
         city: place.city || '',
         state: place.state || '',
         tags: place.tags || [],
-        opening_time: place.opening_time || place.open_time || null,
-        closing_time: place.closing_time || place.close_time || null,
         tripLocation: tripLocation || place.city || '',
       };
       setSelectedPlaces((prev) => [...prev, normalized]);
@@ -278,88 +364,9 @@ const PlanTrip = () => {
     };
   };
 
-  const handleViewMap = () => {
-    setTripData(buildMapTripData());
-    navigate('/map');
-  };
-
-  // "View on Map" for a single recommendation: show the whole trip on the
-  // map but center on and highlight that specific place.
-  const handleViewPlaceOnMap = (rec) => {
-    const place = rec.place || rec;
-    const mapData = buildMapTripData();
-    const key = (x) => String(x.id || x.name);
-    const exists = mapData.selectedPlaces.some((p) => key(p) === key(place));
-    if (!exists) {
-      mapData.selectedPlaces.push({
-        id: place.id || place.name,
-        name: place.name,
-        lat: place.latitude ?? place.lat ?? null,
-        lng: place.longitude ?? place.lng ?? null,
-        category: place.category || 'Tourist',
-        image: place.image || null,
-        rating: place.rating || 0,
-        description: place.description || '',
-        city: place.city || '',
-        state: place.state || '',
-      });
-    }
-    mapData.focusPlace = mapData.selectedPlaces.find((p) => key(p) === key(place));
-    setTripData(mapData);
-    navigate('/map');
-  };
-
-  const handleSubmit = async () => {
-    const errs = validate();
-    setErrors(errs);
-
-    if (Object.keys(errs).length > 0) {
-      scrollToFirstError(errs);
-      return;
-    }
-
-    setLoadingPlaces(true);
-    setErrorMessage('');
-    setGeneratedItinerary(null);
-    setItineraryStats(null);
-    setItineraryError('');
-    setIsPlanGenerated(true);
-
-    const payload = {
-      destination: destination.trim(),
-      start_location: startLocation.trim(),
-      stops: stops.map((s) => s.trim()).filter(Boolean),
-      interests,
-      categories,
-      activities,
-      budget: Number(budget) || 0,
-      travelers: Number(travelers) || 1,
-      duration_days: effectiveDuration,
-      start_date: toISODate(startDate),
-      end_date: toISODate(endDate),
-      top_n: 12,
-    };
-
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/planner/recommend`, payload);
-      setRecommendations(res.data.recommendations || []);
-      setGroupedRecommendations(res.data.locations || []);
-      setSelectedPlaces([]);
-      setErrorMessage('');
-    } catch (err) {
-      console.error('Recommendation API error:', err);
-      setRecommendations([]);
-      setGroupedRecommendations([]);
-      setSelectedPlaces([]);
-      setErrorMessage(UNAVAILABLE_MSG);
-    } finally {
-      setLoadingPlaces(false);
-    }
-  };
-
-  const generateItinerary = async () => {
+  const handleGenerateItinerary = async () => {
     if (selectedPlaces.length === 0) {
-      setItineraryError('Select at least one recommended place to generate an itinerary.');
+      setItineraryError('Select at least one recommended place above to generate an itinerary.');
       return;
     }
 
@@ -371,10 +378,10 @@ const PlanTrip = () => {
       start_location: startLocation.trim(),
       stops: stops.map((s) => s.trim()).filter(Boolean),
       interests,
-      categories,
-      activities,
-      budget: Number(budget) || 0,
-      travelers: Number(travelers) || 1,
+      categories: interests,
+      activities: [],
+      budget: Number(budget) || 15000,
+      travelers: Number(travelers) || 2,
       duration_days: effectiveDuration,
       start_date: toISODate(startDate),
       end_date: toISODate(endDate),
@@ -408,286 +415,212 @@ const PlanTrip = () => {
     }
   };
 
-  const handleAddStop = () => {
-    const s = newStop.trim();
-    if (!s) return;
-    setStops((prev) => [...prev, s]);
-    setNewStop('');
-  };
-
-  const handleRemoveStop = (index) => {
-    setStops((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const buildSavePayload = () => ({
-    title: `${startLocation} → ${destination}`,
-    start_location: startLocation,
-    destination,
-    stops,
-    dates: startDate && endDate ? `${toISODate(startDate)} → ${toISODate(endDate)}` : '',
-    budget: Number(budget) || 0,
-    travelers: Number(travelers) || 1,
-    start_date: startDate ? toISODate(startDate) : null,
-    end_date: endDate ? toISODate(endDate) : null,
-    duration_days: effectiveDuration,
-    interests,
-    categories,
-    activities,
-    selected_places: selectedPlaces,
-    cover_image: selectedPlaces[0]?.image || null,
-    status: 'Active',
-    itinerary: generatedItinerary ? { days: generatedItinerary } : null,
-    route: {
-      routeStops: tripLocations,
-      waypoints: buildMapTripData().waypoints,
-      stats: itineraryStats,
-    },
-  });
-
   const handleSaveTrip = async () => {
     if (selectedPlaces.length === 0) return;
-    const payload = buildSavePayload();
     setSaveError('');
+
+    const payload = {
+      title: `${startLocation} → ${destination}`,
+      start_location: startLocation,
+      destination,
+      stops,
+      dates: startDate && endDate ? `${toISODate(startDate)} → ${toISODate(endDate)}` : '',
+      budget: Number(budget) || 0,
+      travelers: Number(travelers) || 1,
+      start_date: startDate ? toISODate(startDate) : null,
+      end_date: endDate ? toISODate(endDate) : null,
+      duration_days: effectiveDuration,
+      interests,
+      categories: interests,
+      activities: [],
+      selected_places: selectedPlaces,
+      cover_image: selectedPlaces[0]?.image || null,
+      status: 'Active',
+      itinerary: generatedItinerary ? { days: generatedItinerary } : null,
+      route: {
+        routeStops: tripLocations,
+        waypoints: buildMapTripData().waypoints,
+        stats: itineraryStats,
+      },
+    };
 
     try {
       await axios.post(`${API_BASE_URL}/api/trips/`, payload, {
         withCredentials: true,
         timeout: 8000,
       });
+      await refreshTripsCount();
+      setTripData(buildMapTripData());
+      navigate('/my-trips');
     } catch (err) {
-      console.error('Backend save failed:', err.message);
+      console.error('Backend save failed:', err);
       setSaveError(
         err.response?.status === 401
           ? 'Your session has expired. Please log in again to save the trip.'
           : 'Could not save the trip right now. Please try again.'
       );
-      return;
     }
-
-    await refreshTripsCount();
-    setTripData(buildMapTripData());
-    navigate('/my-trips');
   };
 
-  const planDetails = useMemo(() => {
-    const b = Number(budget) || 18000;
-    return {
-      duration: `${effectiveDuration} Days`,
-      breakdown: {
-        transport: Math.floor(b * 0.3),
-        stay: Math.floor(b * 0.4),
-        food: Math.floor(b * 0.2),
-        misc: b - Math.floor(b * 0.3) - Math.floor(b * 0.4) - Math.floor(b * 0.2),
-      },
-    };
-  }, [budget, effectiveDuration]);
+  const handleViewMap = () => {
+    setTripData(buildMapTripData());
+    navigate('/map');
+  };
 
-  const groupedSelectedByLocation = useMemo(() => {
-    const map = new Map();
-    for (const p of selectedPlaces) {
-      const loc = p.tripLocation || p.city || 'Selected Places';
-      if (!map.has(loc)) map.set(loc, []);
-      map.get(loc).push(p);
+  const handleViewPlaceOnMap = (rec) => {
+    const place = rec.place || rec;
+    const mapData = buildMapTripData();
+    const key = (x) => String(x.id || x.name);
+    const exists = mapData.selectedPlaces.some((p) => key(p) === key(place));
+    if (!exists) {
+      mapData.selectedPlaces.push({
+        id: place.id || place.name,
+        name: place.name,
+        lat: place.latitude ?? place.lat ?? null,
+        lng: place.longitude ?? place.lng ?? null,
+        category: place.category || 'Tourist',
+        image: place.image || null,
+        rating: place.rating || 0,
+        description: place.description || '',
+        city: place.city || '',
+        state: place.state || '',
+      });
     }
-    return Array.from(map.entries());
-  }, [selectedPlaces]);
-
-  const inputClass = (field) =>
-    `bg-[#0b0f19] border px-3 py-2 rounded-xl mt-1 text-sm w-full text-white focus:outline-none transition ${
-      errors[field] ? 'border-rose-500/70' : 'border-slate-800 focus:border-indigo-500'
-    }`;
-
-  const chipGroup = (label, icon, options, list, setList, field) => (
-    <div>
-      <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-        {icon} {label}
-      </label>
-      <div className="flex flex-wrap gap-2 mt-2">
-        {options.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => toggleChip(list, setList, opt, field)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
-              list.includes(opt)
-                ? 'bg-indigo-600 border-indigo-400 text-white'
-                : 'bg-[#0b0f19] border-slate-700 text-slate-300 hover:border-indigo-500'
-            }`}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
-      <ValidationMessage message={errors[field]} />
-    </div>
-  );
-
-  const skeletonCards = () =>
-    Array.from({ length: 4 }).map((_, i) => (
-      <div key={i} className="bg-[#121827] border border-slate-800 rounded-2xl overflow-hidden animate-pulse">
-        <div className="h-48 bg-slate-800" />
-        <div className="p-4 space-y-2">
-          <div className="h-3 w-24 bg-slate-800 rounded" />
-          <div className="h-4 w-3/4 bg-slate-800 rounded" />
-          <div className="h-3 w-1/2 bg-slate-800 rounded" />
-          <div className="h-3 w-full bg-slate-800 rounded" />
-        </div>
-      </div>
-    ));
+    mapData.focusPlace = mapData.selectedPlaces.find((p) => key(p) === key(place));
+    setTripData(mapData);
+    navigate('/map');
+  };
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-white p-6 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-12">
+      {/* Page Header */}
+      <PageHeader
+        eyebrow="Smart Travel Planning"
+        title="Plan Your Journey"
+        subtitle="Tell us where you're going, what you enjoy, and how you want to travel."
+      >
+        <button
+          type="button"
+          onClick={handleNewTrip}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-semibold text-cream/70 hover:text-white transition-all"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Reset Form</span>
+        </button>
+      </PageHeader>
 
-      {/* SECTION 1: Route Input Planner */}
-      <div className="bg-[#121827] border border-slate-800 rounded-2xl p-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-indigo-400">
-          <Route className="w-6 h-6" /> Plan Your Trip
-        </h2>
+      {/* ================================================================ */}
+      {/* SECTION 1–7 STRUCTURED FORM (PHASE 2A)                           */}
+      {/* ================================================================ */}
+      <form onSubmit={handleCreateTrip} className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Column 1 & 2: Routing & Timing & Budget */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* 1. Starting Location */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  1
+                </div>
+                <h2 className="font-display text-lg font-semibold text-white">Starting Location</h2>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-safari-400" />
+                  <input
+                    type="text"
+                    value={startLocation}
+                    onChange={(e) => {
+                      setStartLocation(e.target.value);
+                      if (errors.startLocation) setErrors((prev) => ({ ...prev, startLocation: null }));
+                    }}
+                    placeholder="e.g. Bengaluru, Hubballi, Mysuru..."
+                    className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white placeholder-cream/30 text-sm outline-none transition-colors"
+                  />
+                </div>
+                {errors.startLocation && <p className="text-xs text-sunset-400 pl-2">{errors.startLocation}</p>}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="plan-startLocation" className="text-xs font-semibold text-slate-400 uppercase">Starting City / Location</label>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mt-1 ${errors.startLocation ? 'bg-[#0b0f19] border border-rose-500/70' : 'bg-[#0b0f19] border border-slate-800'}`}>
-              <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-              <input
-                id="plan-startLocation"
-                value={startLocation}
-                onChange={(e) => {
-                  setStartLocation(e.target.value);
-                  clearFieldError('startLocation');
-                }}
-                aria-invalid={!!errors.startLocation}
-                aria-describedby={errors.startLocation ? 'plan-startLocation-error' : undefined}
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-white"
-              />
-            </div>
-            <ValidationMessage message={errors.startLocation} id="plan-startLocation-error" />
-          </div>
-
-          <div>
-            <label htmlFor="plan-destination" className="text-xs font-semibold text-slate-400 uppercase">Destination</label>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mt-1 ${errors.destination ? 'bg-[#0b0f19] border border-rose-500/70' : 'bg-[#0b0f19] border border-slate-800'}`}>
-              <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
-              <input
-                id="plan-destination"
-                value={destination}
-                onChange={(e) => {
-                  setDestination(e.target.value);
-                  clearFieldError('destination');
-                }}
-                aria-invalid={!!errors.destination}
-                aria-describedby={errors.destination ? 'plan-destination-error' : undefined}
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-white"
-              />
-            </div>
-            <ValidationMessage message={errors.destination} id="plan-destination-error" />
-          </div>
-
-          <div>
-            <label htmlFor="plan-travelers" className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" /> Travelers
-            </label>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mt-1 ${errors.travelers ? 'bg-[#0b0f19] border border-rose-500/70' : 'bg-[#0b0f19] border border-slate-800'}`}>
-              <input
-                id="plan-travelers"
-                type="number"
-                min="1"
-                value={travelers}
-                onChange={(e) => {
-                  setTravelers(e.target.value);
-                  clearFieldError('travelers');
-                }}
-                aria-invalid={!!errors.travelers}
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-white"
-              />
-            </div>
-            <ValidationMessage message={errors.travelers} />
-          </div>
-
-          <div>
-            <label htmlFor="plan-duration" className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-              <CalendarIcon /> Trip Duration (days)
-            </label>
-            <div className="mt-1 flex items-center gap-2 bg-[#0b0f19] border border-slate-800 px-3 py-2 rounded-xl">
-              <input
-                id="plan-duration"
-                type="number"
-                min="1"
-                placeholder="Auto from dates"
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-white"
-              />
-            </div>
-          </div>
-
-          <DatePicker
-            id="plan-startDate"
-            label="Start Date"
-            placeholder="Select Start Date"
-            value={startDate}
-            minDate={new Date()}
-            error={errors.startDate}
-            onChange={(date) => {
-              setStartDate(date);
-              clearFieldError('startDate');
-              if (endDate && date && toISODate(endDate) < toISODate(date)) {
-                setEndDate(null);
-              }
-            }}
-          />
-
-          <DatePicker
-            id="plan-endDate"
-            label="End Date"
-            placeholder="Select End Date"
-            value={endDate}
-            minDate={new Date()}
-            disabledBefore={startDate}
-            error={errors.endDate}
-            onChange={(date) => {
-              setEndDate(date);
-              clearFieldError('endDate');
-            }}
-          />
-
-          <div>
-            <label htmlFor="plan-budget" className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-              <IndianRupee className="w-3.5 h-3.5" /> Estimated Budget (₹)
-            </label>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mt-1 ${errors.budget ? 'bg-[#0b0f19] border border-rose-500/70' : 'bg-[#0b0f19] border border-slate-800'}`}>
-              <input
-                id="plan-budget"
-                type="number"
-                min="0"
-                value={budget}
-                onChange={(e) => {
-                  setBudget(e.target.value);
-                  clearFieldError('budget');
-                }}
-                aria-invalid={!!errors.budget}
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-white"
-              />
-            </div>
-            <ValidationMessage message={errors.budget} />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-400 uppercase">Via / Stops (add middle stops)</label>
-            <div className="mt-2 space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {stops.map((s, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-[#0b1320] border border-slate-800 px-3 py-1 rounded-full text-sm">
-                    <span className="text-slate-200">{s}</span>
-                    <button type="button" onClick={() => handleRemoveStop(idx)} className="text-slate-400 hover:text-rose-400" aria-label={`Remove stop ${s}`}>
-                      <Trash2 className="w-4 h-4" />
+                {/* Quick Starting Points */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-cream/50">
+                  <span className="text-[11px]">Popular:</span>
+                  {POPULAR_START_CITIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setStartLocation(c)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                        startLocation.toLowerCase() === c.toLowerCase()
+                          ? 'bg-safari-500/20 border-safari-400 text-safari-300'
+                          : 'bg-white/5 border-white/5 hover:border-white/20 text-cream/70'
+                      }`}
+                    >
+                      {c}
                     </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Destination */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  2
+                </div>
+                <h2 className="font-display text-lg font-semibold text-white">Destination</h2>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Compass className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-safari-400" />
+                  <input
+                    type="text"
+                    value={destination}
+                    onChange={(e) => {
+                      setDestination(e.target.value);
+                      if (errors.destination) setErrors((prev) => ({ ...prev, destination: null }));
+                    }}
+                    placeholder="e.g. Mysuru, Hampi, Gokarna, Coorg..."
+                    className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white placeholder-cream/30 text-sm outline-none transition-colors"
+                  />
+                </div>
+                {errors.destination && <p className="text-xs text-sunset-400 pl-2">{errors.destination}</p>}
+
+                {/* Quick Destinations */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-cream/50">
+                  <span className="text-[11px]">Popular:</span>
+                  {POPULAR_DESTINATIONS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setDestination(c)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                        destination.toLowerCase() === c.toLowerCase()
+                          ? 'bg-safari-500/20 border-safari-400 text-safari-300'
+                          : 'bg-white/5 border-white/5 hover:border-white/20 text-cream/70'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Via Locations */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-safari-300">
+                  <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                    3
                   </div>
-                ))}
+                  <h2 className="font-display text-lg font-semibold text-white">Via Locations (Stops along the way)</h2>
+                </div>
+                <span className="text-xs text-cream/40">{stops.length} added</span>
               </div>
 
-              <div className="flex gap-2 items-center mt-1">
+              <div className="flex gap-2">
                 <input
+                  type="text"
                   value={newStop}
                   onChange={(e) => setNewStop(e.target.value)}
                   onKeyDown={(e) => {
@@ -696,246 +629,447 @@ const PlanTrip = () => {
                       handleAddStop();
                     }
                   }}
-                  placeholder="Add stop (e.g., Badami)"
-                  className="flex-1 bg-[#0b0f19] border border-slate-800 px-3 py-2 rounded-xl text-sm text-white focus:outline-none"
+                  placeholder="Add an intermediate stop (e.g. Srirangapatna, Hassan)..."
+                  className="flex-1 px-4 py-3 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white placeholder-cream/30 text-sm outline-none"
                 />
-                <button type="button" onClick={handleAddStop} className="px-3 py-2 bg-indigo-600 rounded-xl text-white" aria-label="Add stop">
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-          {chipGroup('Interests', <Sparkles className="w-3.5 h-3.5 text-amber-400" />, INTEREST_OPTIONS, interests, setInterests, 'interests')}
-          {chipGroup('Categories', <MapPin className="w-3.5 h-3.5 text-emerald-400" />, CATEGORY_OPTIONS, categories, setCategories, 'categories')}
-          {chipGroup('Activities', <CheckCircle className="w-3.5 h-3.5 text-rose-400" />, ACTIVITY_OPTIONS, activities, setActivities, 'activities')}
-        </div>
-
-        <button
-          onClick={handleSubmit}
-          disabled={loadingPlaces}
-          className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
-        >
-          {loadingPlaces ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-          {loadingPlaces ? 'Generating Recommendations...' : 'Generate AI Recommendations'}
-        </button>
-      </div>
-
-      {/* SECTION 2: RESULTS */}
-      {isPlanGenerated || loadingPlaces ? (
-        <div className="space-y-8">
-
-          {/* Loading state */}
-          {loadingPlaces ? (
-            <div className="bg-[#121827] border border-slate-800 rounded-2xl p-6">
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center gap-2 text-indigo-400 text-sm font-semibold">
-                  <Sparkles className="w-5 h-5 animate-pulse" /> Analyzing your trip...
-                </div>
-                <div className="mt-4 flex flex-col items-center gap-1.5 text-slate-300 text-sm font-medium">
-                  <span className="text-xs text-slate-400">Finding places for:</span>
-                  {tripLocations.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs">
-                      {tripLocations.map((loc, i) => (
-                        <React.Fragment key={`${loc}-${i}`}>
-                          {i > 0 && <span className="text-slate-600">↓</span>}
-                          <span className="px-2 py-0.5 rounded-md bg-indigo-600/20 border border-indigo-500/30 text-indigo-200">
-                            {loc}
-                          </span>
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">{skeletonCards()}</div>
-            </div>
-          ) : errorMessage ? (
-            /* Error banner (recommendation API unavailable) */
-            <div className="bg-[#121827] border border-rose-500/40 rounded-2xl p-6 flex items-start gap-4">
-              <AlertTriangle className="w-8 h-8 text-rose-400 shrink-0" />
-              <div className="flex-1">
-                <h3 className="font-bold text-white">⚠ {errorMessage}</h3>
-                <p className="text-sm text-slate-400 mt-1">
-                  Please make sure the backend is running, then try again. Your entered values are kept.
-                </p>
                 <button
-                  onClick={handleSubmit}
-                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2"
+                  type="button"
+                  onClick={handleAddStop}
+                  className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-safari-600 text-white text-xs font-bold transition-all shrink-0 flex items-center gap-1.5"
                 >
-                  <RefreshIcon /> Retry
+                  <Plus className="w-4 h-4" /> Add Stop
                 </button>
               </div>
-            </div>
-          ) : (
-            /* 2A. Grouped Recommended Tourist Places */
-            <div>
-              <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-                <h3 className="text-lg font-bold text-slate-200">
-                  Recommended Places Along Your Trip
-                </h3>
-                <span className="text-xs text-slate-400">
-                  {selectedPlaces.length > 0 ? `${selectedPlaces.length} places selected` : 'No places selected yet'}
-                </span>
-              </div>
 
-              {groupedRecommendations.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800 bg-[#121827] p-8 text-center text-sm text-slate-400">
-                  No recommendations found. Try different interests or a different destination.
-                </div>
-              ) : (
-                <div className="space-y-10">
-                  {groupedRecommendations.map((group, idx) => (
-                    <LocationRecommendationGroup
-                      key={`${group.location}-${idx}`}
-                      group={group}
-                      selectedPlaces={selectedPlaces}
-                      onToggleSelect={handleToggleSelect}
-                      onViewDetails={(rec) => setDetailsRec(rec)}
-                      onViewOnMap={handleViewPlaceOnMap}
-                    />
+              {stops.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {stops.map((stop, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-safari-500/10 border border-safari-500/30 text-xs text-safari-200"
+                    >
+                      <span className="text-[10px] opacity-60 font-bold">Stop {idx + 1}:</span>
+                      <span>{stop}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStop(idx)}
+                        className="hover:text-sunset-400 transition-colors ml-1"
+                        aria-label={`Remove ${stop}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
                   ))}
                 </div>
               )}
             </div>
-          )}
 
-          {/* 2B. Trip Summary + Itinerary */}
-          {!errorMessage && !loadingPlaces && (
-            <div className="bg-[#121827] border border-slate-800 rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-indigo-400 mb-2">Trip Summary</h3>
-              <p className="text-sm text-slate-300 mb-4">
-                Route: <span className="text-white font-semibold">{startLocation} → {destination}</span>
-              </p>
-
-              {groupedSelectedByLocation.length > 0 && (
-                <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                  <div className="flex items-center gap-2 text-emerald-300 font-semibold text-xs uppercase tracking-wide mb-2">
-                    <CheckCircle className="w-4 h-4" /> Selected Places by Location
-                  </div>
-                  <div className="space-y-2">
-                    {groupedSelectedByLocation.map(([loc, items]) => (
-                      <div key={loc} className="flex flex-wrap items-center gap-1.5 text-xs">
-                        <span className="font-bold text-white bg-slate-800 px-2 py-0.5 rounded-md">📍 {loc}</span>
-                        {items.map((p) => (
-                          <span key={p.id} className="bg-slate-800/70 text-slate-200 px-2 py-0.5 rounded-full border border-slate-700">
-                            {p.name}
-                          </span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+            {/* 4. Travel Dates & Duration */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  4
                 </div>
-              )}
+                <h2 className="font-display text-lg font-semibold text-white">Travel Dates &amp; Duration</h2>
+              </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-[#0b0f19] p-3 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400">Total Distance</span>
-                  <p className="text-base font-bold text-slate-100">
-                    {itineraryStats ? `${itineraryStats.totalDistanceKm} km` : '—'}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-cream/70 uppercase tracking-wider mb-2">
+                    Dates
+                  </label>
+                  <DatePicker
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={handleStartDateChange}
+                    onEndDateChange={handleEndDateChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-cream/70 uppercase tracking-wider mb-2">
+                    Total Duration (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="14"
+                    value={durationDays || effectiveDuration}
+                    onChange={(e) => handleDurationDaysChange(e.target.value)}
+                    placeholder={`${effectiveDuration} days`}
+                    className="w-full px-4 py-3 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white placeholder-cream/30 text-sm outline-none"
+                  />
+                  <p className="text-[11px] text-safari-300 font-medium mt-1">
+                    {effectiveDuration} Day(s) · {Math.max(0, effectiveDuration - 1)} Night(s)
                   </p>
                 </div>
-                <div className="bg-[#0b0f19] p-3 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400">Duration</span>
-                  <p className="text-base font-bold text-slate-100">{planDetails.duration}</p>
+              </div>
+            </div>
+
+            {/* 5. Budget & Travelers */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  5
                 </div>
-                <div className="bg-[#0b0f19] p-3 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400">Selected Spots</span>
-                  <p className="text-base font-bold text-emerald-400">{selectedPlaces.length} Spots Added</p>
+                <h2 className="font-display text-lg font-semibold text-white">Budget &amp; Travelers</h2>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-cream/70 uppercase tracking-wider mb-2">
+                    Estimated Budget (₹ INR)
+                  </label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-safari-400" />
+                    <input
+                      type="number"
+                      step="500"
+                      value={budget}
+                      onChange={(e) => {
+                        setBudget(e.target.value);
+                        if (errors.budget) setErrors((prev) => ({ ...prev, budget: null }));
+                      }}
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white text-sm outline-none font-semibold"
+                    />
+                  </div>
+                  {errors.budget && <p className="text-xs text-sunset-400 mt-1">{errors.budget}</p>}
                 </div>
-                <div className="bg-[#0b0f19] p-3 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400">Est. Budget</span>
-                  <p className="text-base font-bold text-slate-100">₹{Number(budget).toLocaleString()}</p>
+
+                <div>
+                  <label className="block text-xs font-semibold text-cream/70 uppercase tracking-wider mb-2">
+                    Number of Travelers
+                  </label>
+                  <div className="relative">
+                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-safari-400" />
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={travelers}
+                      onChange={(e) => {
+                        setTravelers(e.target.value);
+                        if (errors.travelers) setErrors((prev) => ({ ...prev, travelers: null }));
+                      }}
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl bg-ink-900 border border-white/10 focus:border-safari-400 text-white text-sm outline-none font-semibold"
+                    />
+                  </div>
+                  {errors.travelers && <p className="text-xs text-sunset-400 mt-1">{errors.travelers}</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Travel Style & Interests (Phase 2A requirements) */}
+          <div className="space-y-6">
+            {/* 6. Travel Style */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  6
+                </div>
+                <h2 className="font-display text-lg font-semibold text-white">Travel Style</h2>
+              </div>
+              <p className="text-xs text-cream/50">Pick how you love to explore:</p>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {TRAVEL_STYLES.map((style) => {
+                  const active = travelStyle.toLowerCase() === style.id.toLowerCase();
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => setTravelStyle(style.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        active
+                          ? 'bg-safari-600/20 border-safari-400 shadow-md shadow-safari-900/30'
+                          : 'bg-white/[0.02] border-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-display font-semibold text-sm text-white">{style.label}</span>
+                        {active && <CheckCircle className="w-4 h-4 text-safari-400" />}
+                      </div>
+                      <p className="text-[11px] text-cream/50 mt-0.5">{style.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 7. Interests */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-safari-300">
+                <div className="w-7 h-7 rounded-xl bg-safari-500/10 border border-safari-500/20 flex items-center justify-center text-xs font-bold">
+                  7
+                </div>
+                <h2 className="font-display text-lg font-semibold text-white">Interests</h2>
+              </div>
+              <p className="text-xs text-cream/50">Select all that excite you:</p>
+
+              <div className="flex flex-wrap gap-2">
+                {INTERESTS.map((interest) => {
+                  const active = interests.includes(interest);
+                  return (
+                    <button
+                      key={interest}
+                      type="button"
+                      onClick={() => toggleInterest(interest)}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                        active
+                          ? 'bg-safari-600 text-white border-safari-500 shadow-md shadow-safari-900/30'
+                          : 'bg-white/5 border-white/10 text-cream/70 hover:border-white/20 hover:text-white'
+                      }`}
+                    >
+                      {interest}
+                    </button>
+                  );
+                })}
+              </div>
+              {errors.interests && <p className="text-xs text-sunset-400">{errors.interests}</p>}
+            </div>
+
+            {/* Main Submit CTA */}
+            <div className="rounded-3xl border border-safari-500/30 bg-safari-950/20 p-6 space-y-4 text-center">
+              <button
+                type="submit"
+                disabled={loadingPlaces}
+                className="w-full py-4 px-6 rounded-full bg-safari-600 hover:bg-safari-500 text-white font-display font-semibold text-base shadow-xl shadow-safari-900/50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loadingPlaces ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Discovering Attractions...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 text-sunset-300" />
+                    <span>Create My Trip</span>
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-cream/50">
+                Instantly recommends verified places along your route without leaving this page.
+              </p>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* ================================================================ */}
+      {/* ERROR & LOADING STATES                                           */}
+      {/* ================================================================ */}
+      {loadingPlaces && (
+        <LoadingState
+          message="Discovering authentic places..."
+          subtitle={`Curating recommendations from ${startLocation} to ${destination} across ${interests.join(', ')}`}
+        />
+      )}
+
+      {errorMessage && (
+        <ErrorState
+          title="Unable to load recommendations"
+          message={errorMessage}
+          onRetry={handleCreateTrip}
+        />
+      )}
+
+      {/* ================================================================ */}
+      {/* PHASE 2B — RECOMMENDATION RESULTS                                */}
+      {/* ================================================================ */}
+      {isPlanGenerated && !loadingPlaces && groupedRecommendations.length > 0 && (
+        <section className="pt-8 space-y-8 border-t border-white/10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-safari-400 mb-2">
+                Handpicked Destinations
+              </p>
+              <h2 className="font-display text-3xl font-semibold text-white">
+                Your Personalized Journey
+              </h2>
+              <p className="text-sm text-cream/60 mt-1 max-w-xl">
+                Choose the spots you want to visit, then click "Generate Smart Itinerary" to build your day-by-day travel timeline.
+              </p>
+            </div>
+
+            {/* Selection Counter & Generate Action */}
+            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              <span className="px-3.5 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-safari-300">
+                {selectedPlaces.length} Selected
+              </span>
+              <button
+                type="button"
+                onClick={handleGenerateItinerary}
+                disabled={selectedPlaces.length === 0 || loadingItinerary}
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-safari-600 hover:bg-safari-500 text-white text-xs font-bold transition-all shadow-xl shadow-safari-900/50 disabled:opacity-40 disabled:cursor-not-allowed hover:-translate-y-0.5"
+              >
+                {loadingItinerary ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Building Timeline...</span>
+                  </>
+                ) : (
+                  <>
+                    <Route className="w-4 h-4" />
+                    <span>Generate Smart Itinerary</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {itineraryError && (
+            <div className="p-4 rounded-2xl bg-sunset-500/10 border border-sunset-500/20 text-xs text-sunset-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{itineraryError}</span>
+            </div>
+          )}
+
+          {/* Grouped Recommendation Cards */}
+          <div className="space-y-12">
+            {groupedRecommendations.map((group) => (
+              <LocationRecommendationGroup
+                key={group.location}
+                group={group}
+                selectedPlaces={selectedPlaces}
+                onToggleSelect={togglePlaceSelection}
+                onViewDetails={(rec) => setDetailsRec(rec)}
+                onViewOnMap={(rec) => handleViewPlaceOnMap(rec)}
+              />
+            ))}
+          </div>
+
+          {/* Floating / Sticky Bottom Bar if places selected */}
+          {selectedPlaces.length > 0 && (
+            <div className="sticky bottom-6 z-30 p-4 rounded-3xl bg-ink-950/95 backdrop-blur-md border border-safari-500/40 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-safari-600/20 border border-safari-500/30 flex items-center justify-center text-safari-300 font-bold">
+                  {selectedPlaces.length}
+                </div>
+                <div>
+                  <p className="font-display font-semibold text-white text-sm">
+                    {selectedPlaces.length} place{selectedPlaces.length > 1 ? 's' : ''} in your travel roster
+                  </p>
+                  <p className="text-xs text-cream/50">
+                    Ready to sequence into a day-by-day itinerary
+                  </p>
                 </div>
               </div>
 
-              <div className="grid gap-3 mt-4 md:grid-cols-2">
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Transport</p>
-                  <p className="mt-2 text-sm text-white font-semibold">₹{planDetails.breakdown.transport.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500 mt-1">Includes buses, taxis and inter-stop travel.</p>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Stay</p>
-                  <p className="mt-2 text-sm text-white font-semibold">₹{planDetails.breakdown.stay.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500 mt-1">Hotel or lodge booking recommendation.</p>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Food / Shopping</p>
-                  <p className="mt-2 text-sm text-white font-semibold">₹{planDetails.breakdown.food.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500 mt-1">Meals, snacks and local souvenirs.</p>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Miscellaneous</p>
-                  <p className="mt-2 text-sm text-white font-semibold">₹{planDetails.breakdown.misc.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500 mt-1">Tips, entry fees, and buffer expenses.</p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
                 <button
-                  onClick={generateItinerary}
-                  disabled={loadingItinerary}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
-                >
-                  {loadingItinerary ? <Loader2 className="w-5 h-5 animate-spin" /> : <Route className="w-5 h-5" />}
-                  {loadingItinerary ? 'Building Itinerary...' : generatedItinerary ? 'Regenerate Plan' : 'Generate Plan'}
-                </button>
-                <button
+                  type="button"
                   onClick={handleViewMap}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-semibold text-cream"
                 >
-                  <Navigation className="w-4 h-4" /> View Map
+                  Preview on Map
                 </button>
                 <button
-                  onClick={handleSaveTrip}
-                  disabled={selectedPlaces.length === 0}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={handleGenerateItinerary}
+                  disabled={loadingItinerary}
+                  className="flex-1 sm:flex-initial px-6 py-2.5 rounded-full bg-safari-600 hover:bg-safari-500 text-white text-xs font-bold transition-all shadow-lg shadow-safari-900/40 flex items-center justify-center gap-1.5"
                 >
-                  <CheckCircle className="w-4 h-4" /> Save Trip
+                  {loadingItinerary ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Route className="w-4 h-4" />
+                  )}
+                  <span>Generate Itinerary</span>
                 </button>
               </div>
+            </div>
+          )}
+        </section>
+      )}
 
-              {itineraryError && (
-                <div className="mt-4 rounded-2xl border border-rose-500/40 bg-slate-950/70 p-4 flex items-start gap-3 text-sm text-rose-300">
-                  <AlertTriangle className="w-5 h-5 shrink-0" /> {itineraryError}
-                </div>
-              )}
+      {/* ================================================================ */}
+      {/* PHASE 2C — ITINERARY (DAY 1, DAY 2, DAY 3 TIMELINE)             */}
+      {/* ================================================================ */}
+      {loadingItinerary && (
+        <LoadingState
+          message="Building your journey..."
+          subtitle="Calculating travel distances, visiting hours and sequencing optimal stops"
+        />
+      )}
 
-              {saveError && (
-                <div className="mt-4 rounded-2xl border border-rose-500/40 bg-slate-950/70 p-4 flex items-start gap-3 text-sm text-rose-300">
-                  <AlertTriangle className="w-5 h-5 shrink-0" /> {saveError}
-                </div>
-              )}
+      {generatedItinerary && !loadingItinerary && (
+        <section className="pt-10 space-y-8 border-t border-white/10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-safari-400 mb-2">
+                Travel Schedule
+              </p>
+              <h2 className="font-display text-3xl font-semibold text-white">
+                Your Complete Itinerary
+              </h2>
+              <p className="text-sm text-cream/60 mt-1 max-w-xl">
+                Structured day-by-day travel plan with morning, afternoon and evening recommendations.
+              </p>
+            </div>
 
-              <div className="mt-6 border-t border-slate-800 pt-5 space-y-4">
-                <h4 className="text-sm font-bold text-white">Itinerary</h4>
-                <div className="space-y-3">
-                  {generatedItinerary ? (
-                    <TripTimeline itinerary={{ days: generatedItinerary }} />
-                  ) : (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-400">
-                      No generated itinerary yet. Select places and click "Generate Plan" to create a day-wise plan based on selected places.
-                    </div>
-                  )}
-                </div>
+            {/* Save Trip Button */}
+            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={handleViewMap}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition-all"
+              >
+                <Navigation className="w-4 h-4 text-safari-400" />
+                <span>View Route on Map</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTrip}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-safari-600 hover:bg-safari-500 text-white text-xs font-bold transition-all shadow-xl shadow-safari-900/50"
+              >
+                <Bookmark className="w-4 h-4" />
+                <span>Save Trip to My Trips</span>
+              </button>
+            </div>
+          </div>
+
+          {saveError && (
+            <div className="p-4 rounded-2xl bg-sunset-500/10 border border-sunset-500/20 text-xs text-sunset-300">
+              {saveError}
+            </div>
+          )}
+
+          {/* Stats Bar */}
+          {itineraryStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 rounded-3xl bg-white/[0.02] border border-white/10">
+              <div>
+                <p className="text-xs text-cream/50 uppercase tracking-wider">Duration</p>
+                <p className="font-display text-2xl font-semibold text-white mt-0.5">
+                  {itineraryStats.durationDays} Days
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-cream/50 uppercase tracking-wider">Total Route</p>
+                <p className="font-display text-2xl font-semibold text-safari-300 mt-0.5">
+                  ~{itineraryStats.totalDistanceKm} km
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-cream/50 uppercase tracking-wider">Destinations</p>
+                <p className="font-display text-2xl font-semibold text-white mt-0.5">
+                  {itineraryStats.selectedCount} Stops
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-cream/50 uppercase tracking-wider">Est. Budget</p>
+                <p className="font-display text-2xl font-semibold text-sunset-300 mt-0.5">
+                  ₹{Number(itineraryStats.totalCost || budget).toLocaleString()}
+                </p>
               </div>
             </div>
           )}
 
-        </div>
-      ) : (
-        <div className="h-full min-h-[350px] bg-[#121827] border border-slate-800 rounded-2xl flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center mb-4 text-indigo-400">
-            <Route className="w-8 h-8" />
-          </div>
-          <h3 className="text-lg font-semibold text-white mb-1">No AI Plan Generated Yet</h3>
-          <p className="text-sm text-slate-400 max-w-sm">
-            Enter your trip details and click "Generate AI Recommendations" to see places scored against your interests.
-          </p>
-        </div>
+          {/* Timeline View */}
+          <TripTimeline
+            itinerary={generatedItinerary}
+            onOpenMapPlace={(place) => handleViewPlaceOnMap({ place })}
+          />
+        </section>
       )}
 
       {/* Place Details Modal */}
@@ -944,14 +1078,9 @@ const PlanTrip = () => {
           place={detailsRec.place || detailsRec}
           rec={detailsRec}
           onClose={() => setDetailsRec(null)}
+          onAddToTrip={(p) => togglePlaceSelection({ place: p }, detailsRec.tripLocation)}
         />
       )}
     </div>
   );
-};
-
-const CalendarIcon = () => <Calendar className="w-3.5 h-3.5" />;
-
-const RefreshIcon = () => <RefreshCw className="w-4 h-4" />;
-
-export default PlanTrip;
+}

@@ -1,4 +1,21 @@
 {
   "css.lint.unknownAtRules": "ignore",
-  "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe"
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/tests"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/tests"
+  ],
+  "sqltools.connections": [
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "database": "${workspaceFolder:smart-tourist-system}/backend/smarttourist",
+      "name": "Smartdb"
+    }
+  ],
+  "sqltools.useNodeRuntime": true
 }

@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Trash2, Navigation, Eye, MapPin, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  Bookmark, Trash2, Navigation, Eye, MapPin, Loader2,
+  AlertTriangle, Heart, ArrowRight,
+} from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { useTrip } from '../context/TripContext';
-import PlaceCard from '../components/PlaceCard';
+import SmartImage from '../components/SmartImage';
+import PageHeader from '../components/PageHeader';
+import LoadingState from '../components/LoadingState';
+import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
 import PlaceDetailsModal from '../components/PlaceDetailsModal';
 
 export default function Favorites() {
@@ -23,7 +30,10 @@ export default function Favorites() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/favorites/`, { withCredentials: true, timeout: 6000 });
+      const res = await axios.get(`${API_BASE_URL}/api/favorites/`, {
+        withCredentials: true,
+        timeout: 6000,
+      });
       setFavorites(res.data?.data || []);
     } catch (err) {
       if (err.response?.status === 401) handleSessionExpired();
@@ -35,7 +45,6 @@ export default function Favorites() {
 
   useEffect(() => {
     fetchFavorites();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const removeFavorite = async (placeId) => {
@@ -63,8 +72,8 @@ export default function Favorites() {
         {
           name: place.name,
           stop_number: 1,
-          lat: place.latitude,
-          lng: place.longitude,
+          lat: place.latitude ?? place.lat,
+          lng: place.longitude ?? place.lng,
           description: `${place.category} · ${place.city}`,
         },
       ],
@@ -77,86 +86,127 @@ export default function Favorites() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
-          <Bookmark className="w-4 h-4" /> Saved Places
-        </div>
-        <h1 className="text-2xl font-black text-white mt-1">Your Favorites</h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Places you have bookmarked while exploring, with one-click maps and details.
-        </p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-8">
+      {/* Page Header (Phase 2G Requirement) */}
+      <PageHeader
+        eyebrow="Saved Places"
+        title="Your Favorites"
+        subtitle="Places you've bookmarked while discovering India, with instant details and map routing."
+      >
+        <button
+          onClick={() => navigate('/destinations')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-semibold text-cream transition-all"
+        >
+          <span>Explore More</span>
+          <ArrowRight className="w-3.5 h-3.5 text-safari-400" />
+        </button>
+      </PageHeader>
 
       {error && (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 flex items-start gap-2 text-sm text-rose-300">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {error}
-        </div>
+        <ErrorState message={error} onRetry={fetchFavorites} />
       )}
 
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-3 bg-slate-900/50 rounded-2xl border border-slate-800">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-          <p className="text-sm font-medium text-slate-300">Loading your favorites...</p>
-        </div>
+        <LoadingState
+          message="Loading your saved favorites..."
+          subtitle="Fetching your bookmarked attractions"
+        />
       ) : favorites.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 bg-slate-900 border border-slate-800 rounded-2xl p-8 space-y-3">
-          <Bookmark className="w-10 h-10 mx-auto text-indigo-400" />
-          <p className="font-semibold text-white text-base">No favorites saved yet</p>
-          <p className="text-xs text-slate-500">
-            Bookmark places from recommendations or the map, and they will appear here.
-          </p>
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <button
-              onClick={() => navigate('/plan-trip')}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
-            >
-              Plan a Trip
-            </button>
-            <button
-              onClick={() => navigate('/nearby')}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors"
-            >
-              Explore Nearby
-            </button>
-          </div>
-        </div>
+        /* Empty State (Phase 2G Requirement: "Your favorite places will appear here." CTA: "Explore Destinations") */
+        <EmptyState
+          icon={Heart}
+          title="Your favorite places will appear here."
+          description="Save places you love as you explore itineraries and recommendations, then find them all right here."
+          actionLabel="Explore Destinations"
+          onAction={() => navigate('/destinations')}
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        /* Professional Tourism Cards Grid (Image, Place name, Location, Category, View Details, Remove Favorite) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {favorites.map((fav) => {
-            const place = fav.place;
+            const place = fav.place || fav;
+            const placeId = fav.place_id || place.id;
+            const isRemoving = removingId === placeId;
+
             return (
               <div
-                key={fav.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all duration-300 flex flex-col"
+                key={fav.id || placeId}
+                className="group rounded-3xl overflow-hidden border border-white/10 hover:border-safari-400/40 bg-white/[0.02] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-black/20"
               >
-                <PlaceCard place={place} />
-                <div className="p-3 pt-2 flex gap-2">
-                  <button
-                    onClick={() => handleViewOnMap(place)}
-                    disabled={place.latitude == null || place.longitude == null}
-                    className="flex-1 py-2 bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Navigation className="w-3.5 h-3.5" /> Map
-                  </button>
-                  <button
-                    onClick={() => setDetailsPlace(place)}
-                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Details
-                  </button>
-                  <button
-                    onClick={() => removeFavorite(place.id)}
-                    disabled={removingId === place.id}
-                    className="py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                    title="Remove from favorites"
-                    aria-label={`Remove ${place.name} from favorites`}
-                  >
-                    {removingId === place.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <div>
+                  {/* Image */}
+                  <div className="relative h-48 bg-ink-900 overflow-hidden">
+                    {place.image ? (
+                      <SmartImage
+                        src={place.image}
+                        alt={place.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <div className="w-full h-full bg-safari-500/10 flex items-center justify-center text-safari-400">
+                        <MapPin className="w-8 h-8" />
+                      </div>
                     )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-transparent to-transparent pointer-events-none" />
+
+                    {/* Category */}
+                    {place.category && (
+                      <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-ink-950/80 backdrop-blur-md border border-white/15 text-[10px] font-bold uppercase tracking-wider text-cream/90">
+                        {place.category}
+                      </span>
+                    )}
+
+                    {/* Remove Favorite icon button */}
+                    <button
+                      type="button"
+                      onClick={() => removeFavorite(placeId)}
+                      disabled={isRemoving}
+                      className="absolute top-3 right-3 p-2 rounded-full bg-ink-950/80 hover:bg-rose-500/20 text-cream/70 hover:text-rose-400 border border-white/15 transition-all shadow-md"
+                      title="Remove from favorites"
+                    >
+                      {isRemoving ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Content: Place name, Location, Category */}
+                  <div className="p-5 space-y-2">
+                    <h3 className="font-display font-semibold text-lg text-white group-hover:text-safari-300 transition-colors line-clamp-1">
+                      {place.name}
+                    </h3>
+                    <p className="text-xs text-cream/60 flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-safari-400 shrink-0" />
+                      <span className="truncate">{place.city}{place.state ? `, ${place.state}` : ''}</span>
+                    </p>
+                    {place.description && (
+                      <p className="text-xs text-cream/65 line-clamp-2 leading-relaxed mt-1">
+                        {place.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions: View Details, Remove Favorite, View on Map */}
+                <div className="p-5 pt-0 border-t border-white/5 mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDetailsPlace(place)}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition-colors text-center border border-white/10"
+                  >
+                    View Details
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewOnMap(place)}
+                    className="py-2.5 px-3 rounded-xl bg-safari-600 hover:bg-safari-500 text-white text-xs font-bold transition-all shadow-md shadow-safari-900/30 flex items-center justify-center gap-1"
+                    title="View on Map"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Map</span>
                   </button>
                 </div>
               </div>
@@ -165,13 +215,14 @@ export default function Favorites() {
         </div>
       )}
 
-      {favorites.length > 0 && (
-        <p className="text-[10px] text-slate-500 flex items-center gap-1">
-          <MapPin className="w-3 h-3 text-indigo-400" /> {favorites.length} saved place(s) · synced to your account
-        </p>
+      {/* Place Details Modal */}
+      {detailsPlace && (
+        <PlaceDetailsModal
+          place={detailsPlace}
+          onClose={() => setDetailsPlace(null)}
+          onAddToTrip={() => handleViewOnMap(detailsPlace)}
+        />
       )}
-
-      {detailsPlace && <PlaceDetailsModal place={detailsPlace} onClose={() => setDetailsPlace(null)} />}
     </div>
   );
 }

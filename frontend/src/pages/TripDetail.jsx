@@ -12,28 +12,16 @@ import { useTrip } from '../context/TripContext';
 import SmartImage from '../components/SmartImage';
 import PlaceCard from '../components/PlaceCard';
 import TripTimeline from '../components/TripTimeline';
-
-const INTEREST_OPTIONS = [
-  'History', 'Heritage', 'Nature', 'Waterfalls', 'Temples', 'Beaches',
-  'Trekking', 'Wildlife', 'Food', 'Shopping', 'Adventure', 'Museums',
-  'Spiritual', 'Hill Stations',
-];
-
-const ACTIVITY_OPTIONS = [
-  'Photography', 'Trekking', 'Temple Darshan', 'Waterfall Viewing', 'Shopping',
-  'Street Food', 'Wildlife Safari', 'Boating', 'Camping', 'Sightseeing',
-];
-
-const CATEGORY_OPTIONS = [
-  'Heritage', 'Temple', 'Nature', 'Waterfall', 'Wildlife', 'Beach',
-  'Trekking', 'Museum', 'Shopping', 'Food', 'Adventure', 'Garden',
-  'Monument', 'Hill Station',
-];
+import PageHeader from '../components/PageHeader';
+import LoadingState from '../components/LoadingState';
+import ErrorState from '../components/ErrorState';
 
 const formatDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 export default function TripDetail() {
@@ -48,7 +36,6 @@ export default function TripDetail() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
   const [form, setForm] = useState({});
 
   const fetchTrip = async () => {
@@ -65,9 +52,7 @@ export default function TripDetail() {
         handleSessionExpired();
         setError('Your session has expired. Please log in again.');
       } else {
-        setError(err.response?.status === 404
-          ? 'Trip not found.'
-          : 'Could not load this trip. Please try again.');
+        setError(err.response?.status === 404 ? 'Trip not found.' : 'Could not load this trip.');
       }
     } finally {
       setLoading(false);
@@ -76,7 +61,6 @@ export default function TripDetail() {
 
   useEffect(() => {
     fetchTrip();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
   useEffect(() => {
@@ -91,53 +75,10 @@ export default function TripDetail() {
         budget: trip.budget || '',
         start_date: trip.start_date || '',
         end_date: trip.end_date || '',
-        interests: trip.interests || [],
-        categories: trip.categories || [],
-        activities: trip.activities || [],
         status: trip.status || 'Active',
       });
     }
   }, [trip, editing]);
-
-  const toggleChip = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(value) ? prev[key].filter((v) => v !== value) : [...prev[key], value],
-    }));
-  };
-
-  const addStop = () => {
-    const s = String(form.newStop || '').trim();
-    if (!s) return;
-    setForm((prev) => ({ ...prev, stops: [...prev.stops, s], newStop: '' }));
-  };
-
-  const removeStop = (idx) => {
-    setForm((prev) => ({ ...prev, stops: prev.stops.filter((_, i) => i !== idx) }));
-  };
-
-  const buildMapData = () => {
-    const routeStops =
-      trip.route?.routeStops ||
-      [trip.start_location, ...(trip.stops || []), trip.destination].filter(Boolean);
-    return {
-      fromNearby: false,
-      startLocation: trip.start_location,
-      destination: trip.destination,
-      stops: trip.stops || [],
-      routeStops,
-      waypoints: trip.route?.waypoints || [],
-      selectedPlaces: trip.selected_places || [],
-      groupedRecommendations: [],
-      itinerary: trip.itinerary?.days || trip.itinerary || null,
-      stats: trip.route?.stats || null,
-    };
-  };
-
-  const handleViewOnMap = () => {
-    setTripData(buildMapData());
-    navigate('/map');
-  };
 
   const handleDelete = async () => {
     if (!window.confirm(`Delete trip "${trip.title}"? This cannot be undone.`)) return;
@@ -150,39 +91,32 @@ export default function TripDetail() {
       navigate('/my-trips');
     } catch (err) {
       if (err.response?.status === 401) handleSessionExpired();
-      console.error('Error deleting trip:', err);
       setError('Could not delete the trip.');
     }
   };
 
   const handleDuplicate = async () => {
     const payload = {
+      ...trip,
       title: `${trip.title} (Copy)`,
-      start_location: trip.start_location,
-      destination: trip.destination,
-      stops: trip.stops || [],
-      dates: trip.dates,
-      budget: trip.budget,
-      travelers: trip.travelers,
-      start_date: trip.start_date,
-      end_date: trip.end_date,
-      duration_days: trip.duration_days,
-      interests: trip.interests || [],
-      categories: trip.categories || [],
-      activities: trip.activities || [],
-      selected_places: trip.selected_places || [],
-      cover_image: trip.cover_image,
-      status: trip.status,
-      itinerary: trip.itinerary,
-      route: trip.route,
     };
+    delete payload.id;
+    delete payload.created_at;
+    delete payload.updated_at;
+
     try {
-      await axios.post(`${API_BASE_URL}/api/trips/`, payload, { withCredentials: true, timeout: 8000 });
+      const res = await axios.post(`${API_BASE_URL}/api/trips/`, payload, {
+        withCredentials: true,
+        timeout: 8000,
+      });
       await refreshTripsCount();
-      navigate('/my-trips');
+      if (res.data?.data?.id) {
+        navigate(`/my-trips/${res.data.data.id}`);
+      } else {
+        navigate('/my-trips');
+      }
     } catch (err) {
       if (err.response?.status === 401) handleSessionExpired();
-      console.error('Error duplicating trip:', err);
       setError('Could not duplicate the trip.');
     }
   };
@@ -191,24 +125,14 @@ export default function TripDetail() {
     setSaving(true);
     setError('');
     const payload = {
+      ...trip,
       title: String(form.title || '').trim() || trip.title,
       start_location: form.start_location,
       destination: form.destination,
       stops: form.stops,
-      dates: trip.dates,
       budget: Number(form.budget) || 0,
       travelers: Number(form.travelers) || null,
-      start_date: form.start_date || null,
-      end_date: form.end_date || null,
-      duration_days: trip.duration_days,
-      interests: form.interests,
-      categories: form.categories,
-      activities: form.activities,
-      selected_places: trip.selected_places || [],
-      cover_image: trip.cover_image,
       status: form.status,
-      itinerary: trip.itinerary,
-      route: trip.route,
     };
     try {
       const res = await axios.put(`${API_BASE_URL}/api/trips/${trip.id}`, payload, {
@@ -222,444 +146,279 @@ export default function TripDetail() {
       await refreshTripsCount();
     } catch (err) {
       if (err.response?.status === 401) handleSessionExpired();
-      console.error('Error updating trip:', err);
       setError('Could not save changes. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleViewMap = () => {
+    const waypoints = [
+      { name: trip.start_location || 'Start', stop_number: 1, lat: null, lng: null },
+      ...(trip.stops || []).map((s, idx) => ({ name: s, stop_number: idx + 2, lat: null, lng: null })),
+      { name: trip.destination || 'Destination', stop_number: (trip.stops?.length || 0) + 2, lat: null, lng: null },
+    ];
+
+    setTripData({
+      startLocation: trip.start_location,
+      destination: trip.destination,
+      stops: trip.stops || [],
+      routeStops: [trip.start_location, ...(trip.stops || []), trip.destination].filter(Boolean),
+      waypoints,
+      selectedPlaces: trip.selected_places || [],
+      itinerary: trip.itinerary?.days || null,
+      stats: trip.route?.stats || null,
+    });
+    navigate('/map');
+  };
+
   if (loading) {
-    return (
-      <div className="p-6 py-20 flex flex-col items-center gap-3 text-slate-400">
-        <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-        <p>Loading trip details...</p>
-      </div>
-    );
+    return <LoadingState message="Loading trip details..." />;
   }
 
   if (error || !trip) {
     return (
-      <div className="p-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center space-y-4">
-          <AlertTriangle className="w-10 h-10 mx-auto text-amber-400" />
-          <h3 className="text-lg font-bold text-white">{error || 'Trip not found.'}</h3>
-          <button
-            onClick={() => navigate('/my-trips')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors"
-          >
-            Back to My Trips
-          </button>
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-16">
+        <ErrorState
+          title="Trip not found"
+          message={error || 'This journey could not be located.'}
+          onRetry={() => navigate('/my-trips')}
+        />
       </div>
     );
   }
 
   const places = trip.selected_places || [];
+  const days = trip.itinerary?.days || [];
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-10">
+      {/* Back to Trips Navigation */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => navigate('/my-trips')}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-cream/70 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to My Trips</span>
+        </button>
+
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/my-trips')}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-            aria-label="Back to My Trips"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-semibold text-white transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
-              <Bookmark className="w-4 h-4" /> Saved Trip Details
-            </div>
-            <h1 className="text-2xl font-black text-white mt-1">{trip.title}</h1>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleViewOnMap}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-colors"
-          >
-            <Navigation className="w-3.5 h-3.5" /> View on Map
-          </button>
-          <button
-            onClick={() => { setDraftTrip(trip); navigate('/plan-trip'); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-xs font-bold rounded-xl transition-colors border border-indigo-500/30"
-            title="Load this saved trip into the AI trip planner"
-          >
-            <RouteIcon className="w-3.5 h-3.5" /> Edit in Planner
-          </button>
-          <button
-            onClick={() => { setEditing((e) => !e); setError(''); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors"
-          >
-            {editing ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-            {editing ? 'Cancel' : 'Edit'}
+            <Pencil className="w-3.5 h-3.5 text-safari-400" />
+            <span>Edit</span>
           </button>
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-semibold text-white transition-colors"
           >
-            <Copy className="w-3.5 h-3.5" /> Duplicate
+            <Copy className="w-3.5 h-3.5 text-sunset-400" />
+            <span>Duplicate</span>
           </button>
           <button
             onClick={handleDelete}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-rose-600/20 text-rose-300 text-xs font-bold rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-300 transition-colors"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete</span>
           </button>
         </div>
       </div>
 
       {saved && (
-        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex items-center gap-2 text-sm text-emerald-300">
-          <Check className="w-4 h-4" /> Trip updated successfully.
-        </div>
-      )}
-      {error && (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 flex items-center gap-2 text-sm text-rose-300">
-          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        <div className="p-4 rounded-2xl bg-safari-500/20 border border-safari-500/40 text-safari-200 text-xs flex items-center gap-2">
+          <Check className="w-4 h-4" />
+          <span>Trip details updated successfully!</span>
         </div>
       )}
 
-      {/* Cover */}
-      {trip.cover_image && (
-        <div className="relative h-56 rounded-2xl overflow-hidden border border-slate-800">
-          <SmartImage src={trip.cover_image} alt={trip.title} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 to-transparent" />
-          <span className="absolute top-3 right-3 bg-emerald-500 text-slate-950 font-bold text-[10px] px-2.5 py-1 rounded-md">
-            {trip.status || 'Active'}
-          </span>
-        </div>
-      )}
+      {/* Hero Banner with Trip Overview */}
+      <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-ink-900 shadow-2xl">
+        <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-ink-950">
+          {trip.cover_image ? (
+            <SmartImage src={trip.cover_image} alt={trip.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-safari-950 to-ink-950 flex items-center justify-center text-safari-400">
+              <RouteIcon className="w-16 h-16 opacity-40" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-transparent pointer-events-none" />
 
-      {editing ? (
-        /* ============ EDIT MODE ============ */
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-lg font-bold text-indigo-400 flex items-center gap-2">
-            <Pencil className="w-5 h-5" /> Edit Trip
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Title</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              >
-                <option>Active</option>
-                <option>Planned</option>
-                <option>Completed</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Starting Location</label>
-              <input
-                value={form.start_location}
-                onChange={(e) => setForm({ ...form, start_location: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Destination</label>
-              <input
-                value={form.destination}
-                onChange={(e) => setForm({ ...form, destination: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Travelers</label>
-              <input
-                type="number"
-                min="1"
-                value={form.travelers}
-                onChange={(e) => setForm({ ...form, travelers: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Budget (₹)</label>
-              <input
-                type="number"
-                min="0"
-                value={form.budget}
-                onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">Start Date</label>
-              <input
-                type="date"
-                value={form.start_date || ''}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase">End Date</label>
-              <input
-                type="date"
-                value={form.end_date || ''}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
+          {/* Badges */}
+          <div className="absolute top-6 left-6 right-6 flex items-center justify-between">
+            <span className="px-3 py-1 rounded-full bg-safari-600/90 text-white font-bold text-xs uppercase tracking-wider backdrop-blur-md">
+              {trip.status || 'Active'}
+            </span>
+            <button
+              onClick={handleViewMap}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ink-950/80 hover:bg-safari-600 text-white text-xs font-bold border border-white/20 backdrop-blur-md transition-all shadow-lg"
+            >
+              <Navigation className="w-3.5 h-3.5 text-safari-300" />
+              <span>Explore Route on Map</span>
+            </button>
           </div>
 
+          {/* Title & Route Anchors */}
+          <div className="absolute bottom-6 left-6 right-6 space-y-2">
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-white leading-tight">
+              {trip.title}
+            </h1>
+            <p className="text-sm text-cream/75 flex items-center gap-2 flex-wrap">
+              <MapPin className="w-4 h-4 text-safari-400 shrink-0" />
+              <span>{trip.start_location}</span>
+              {trip.stops && trip.stops.length > 0 && (
+                <span>➔ Via {trip.stops.join(', ')}</span>
+              )}
+              <span>➔ {trip.destination}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Stats Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/10 bg-white/[0.02] border-t border-white/10 p-5">
+          <div className="px-4 py-2">
+            <p className="text-xs text-cream/40 uppercase tracking-wider">Travel Dates</p>
+            <p className="font-display text-lg font-semibold text-white mt-1">
+              {trip.dates || trip.start_date || 'Flexible'}
+            </p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-cream/40 uppercase tracking-wider">Estimated Budget</p>
+            <p className="font-display text-lg font-semibold text-safari-300 mt-1">
+              ₹{Number(trip.budget || 0).toLocaleString()}
+            </p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-cream/40 uppercase tracking-wider">Travelers</p>
+            <p className="font-display text-lg font-semibold text-white mt-1">
+              {trip.travelers || 1} Person(s)
+            </p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-cream/40 uppercase tracking-wider">Destinations</p>
+            <p className="font-display text-lg font-semibold text-sunset-300 mt-1">
+              {places.length} Places
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Itinerary Timeline */}
+      {days.length > 0 && (
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-safari-400">Day-by-Day Plan</p>
+              <h2 className="font-display text-2xl font-semibold text-white mt-1">Travel Timeline</h2>
+            </div>
+          </div>
+          <TripTimeline itinerary={days} />
+        </section>
+      )}
+
+      {/* Selected Places Grid */}
+      {places.length > 0 && (
+        <section className="space-y-6">
           <div>
-            <label className="text-xs font-semibold text-slate-400 uppercase">Via / Stops</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {form.stops.map((s, idx) => (
-                <span key={idx} className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-3 py-1 rounded-full text-sm text-slate-200">
-                  {s}
-                  <button type="button" onClick={() => removeStop(idx)} className="text-slate-400 hover:text-rose-400" aria-label={`Remove ${s}`}>
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              ))}
-              <div className="flex items-center gap-2">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-safari-400">Included Spots</p>
+            <h2 className="font-display text-2xl font-semibold text-white mt-1">All Places in Trip</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {places.map((place, i) => (
+              <PlaceCard key={place.id || i} place={place} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Edit Modal in Unified Ink Styling */}
+      {editing && (
+        <div className="fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-ink-900 border border-white/15 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl font-semibold text-white">Edit Trip Details</h3>
+              <button onClick={() => setEditing(false)} className="text-cream/50 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-cream/70 uppercase font-semibold mb-1">Trip Name</label>
                 <input
-                  value={form.newStop || ''}
-                  onChange={(e) => setForm({ ...form, newStop: e.target.value })}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStop(); } }}
-                  placeholder="Add stop"
-                  className="bg-slate-950 border border-slate-800 px-3 py-1 rounded-full text-sm text-white focus:outline-none focus:border-indigo-500"
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="w-full px-4 py-3 rounded-2xl bg-ink-950 border border-white/10 text-white focus:border-safari-400 outline-none text-sm"
                 />
-                <button type="button" onClick={addStop} className="p-1.5 bg-indigo-600 rounded-full text-white" aria-label="Add stop">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-cream/70 uppercase font-semibold mb-1">Starting Point</label>
+                  <input
+                    type="text"
+                    value={form.start_location}
+                    onChange={(e) => setForm({ ...form, start_location: e.target.value })}
+                    className="w-full px-4 py-3 rounded-2xl bg-ink-950 border border-white/10 text-white focus:border-safari-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-cream/70 uppercase font-semibold mb-1">Destination</label>
+                  <input
+                    type="text"
+                    value={form.destination}
+                    onChange={(e) => setForm({ ...form, destination: e.target.value })}
+                    className="w-full px-4 py-3 rounded-2xl bg-ink-950 border border-white/10 text-white focus:border-safari-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-cream/70 uppercase font-semibold mb-1">Budget (₹)</label>
+                  <input
+                    type="number"
+                    value={form.budget}
+                    onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                    className="w-full px-4 py-3 rounded-2xl bg-ink-950 border border-white/10 text-white focus:border-safari-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-cream/70 uppercase font-semibold mb-1">Travelers</label>
+                  <input
+                    type="number"
+                    value={form.travelers}
+                    onChange={(e) => setForm({ ...form, travelers: e.target.value })}
+                    className="w-full px-4 py-3 rounded-2xl bg-ink-950 border border-white/10 text-white focus:border-safari-400 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="px-5 py-2.5 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-cream text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-full bg-safari-600 hover:bg-safari-500 text-white text-xs font-bold transition-all shadow-lg shadow-safari-900/40 flex items-center gap-1.5"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>Save Changes</span>
+              </button>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Interests
-              </label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {INTEREST_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => toggleChip('interests', opt)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
-                      form.interests.includes(opt) ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-indigo-500'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-emerald-400" /> Categories
-              </label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {CATEGORY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => toggleChip('categories', opt)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
-                      form.categories.includes(opt) ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-emerald-500'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 text-emerald-400" /> Activities
-              </label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {ACTIVITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => toggleChip('activities', opt)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
-                      form.activities.includes(opt) ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-emerald-500'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleSaveEdit}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold rounded-xl transition-colors"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
         </div>
-      ) : (
-        /* ============ VIEW MODE ============ */
-        <>
-          {/* Route + facts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
-                <RouteIcon className="w-4 h-4 text-indigo-400" /> Route
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="bg-emerald-600/15 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-lg font-semibold">
-                  {trip.start_location || 'Start'}
-                </span>
-                {trip.stops && trip.stops.length > 0 && trip.stops.map((s) => (
-                  <React.Fragment key={s}>
-                    <span className="text-slate-500">➔</span>
-                    <span className="bg-sky-600/15 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-lg font-semibold">{s}</span>
-                  </React.Fragment>
-                ))}
-                <span className="text-slate-500">➔</span>
-                <span className="bg-rose-600/15 text-rose-300 border border-rose-500/40 px-3 py-1 rounded-lg font-semibold">
-                  {trip.destination}
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3">
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3" /> Dates</p>
-                  <p className="text-sm font-bold text-slate-200 mt-1">{trip.dates || '—'}</p>
-                </div>
-                <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3">
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1"><Users className="w-3 h-3" /> Travelers</p>
-                  <p className="text-sm font-bold text-slate-200 mt-1">{trip.travelers || '—'}</p>
-                </div>
-                <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3">
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1"><IndianRupee className="w-3 h-3" /> Budget</p>
-                  <p className="text-sm font-bold text-indigo-400 mt-1">₹{(trip.budget || 0).toLocaleString()}</p>
-                </div>
-                <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3">
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1"><Bookmark className="w-3 h-3" /> Places</p>
-                  <p className="text-sm font-bold text-emerald-400 mt-1">{places.length}</p>
-                </div>
-              </div>
-
-              {(trip.interests?.length > 0 || trip.categories?.length > 0 || trip.activities?.length > 0) && (
-                <div className="mt-4 space-y-2">
-                  {trip.interests?.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-slate-400 font-semibold">Interests:</span>
-                      {trip.interests.map((i) => (
-                        <span key={i} className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">{i}</span>
-                      ))}
-                    </div>
-                  )}
-                  {trip.categories?.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-slate-400 font-semibold">Categories:</span>
-                      {trip.categories.map((c) => (
-                        <span key={c} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">{c}</span>
-                      ))}
-                    </div>
-                  )}
-                  {trip.activities?.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-slate-400 font-semibold">Activities:</span>
-                      {trip.activities.map((a) => (
-                        <span key={a} className="bg-sky-500/10 border border-sky-500/30 text-sky-300 px-2 py-0.5 rounded-full">{a}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <p className="mt-4 text-[10px] text-slate-500">
-                Created {formatDate(trip.created_at)} · Updated {formatDate(trip.updated_at)}
-              </p>
-            </div>
-
-            {/* Route summary */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
-                <MapPin className="w-4 h-4 text-amber-400" /> Route Summary
-              </h2>
-              {trip.route?.stats ? (
-                <div className="space-y-2 text-xs">
-                  {trip.route.stats.totalDistanceKm != null && (
-                    <div className="flex justify-between"><span className="text-slate-400">Distance</span><span className="font-bold text-slate-200">{trip.route.stats.totalDistanceKm} km</span></div>
-                  )}
-                  {trip.route.stats.durationDays != null && (
-                    <div className="flex justify-between"><span className="text-slate-400">Duration</span><span className="font-bold text-slate-200">{trip.route.stats.durationDays} days</span></div>
-                  )}
-                  {trip.route.stats.totalCost != null && (
-                    <div className="flex justify-between"><span className="text-slate-400">Est. Cost</span><span className="font-bold text-indigo-400">₹{Math.round(trip.route.stats.totalCost).toLocaleString()}</span></div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500">No route stats saved for this trip.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Selected places */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
-              <Star className="w-4 h-4 text-amber-400" /> Selected Places ({places.length})
-            </h2>
-            {places.length === 0 ? (
-              <p className="text-xs text-slate-500">No places were selected for this trip.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {places.map((p) => (
-                  <PlaceCard key={p.id || p.name} place={p} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Itinerary */}
-          {trip.itinerary && (trip.itinerary.days || Array.isArray(trip.itinerary)) && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
-                <RouteIcon className="w-4 h-4 text-emerald-400" /> Day-wise Itinerary
-              </h2>
-              <TripTimeline itinerary={trip.itinerary} />
-            </div>
-          )}
-
-          {/* Waypoints summary */}
-          {trip.route?.waypoints?.length > 0 && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
-                <MapPin className="w-4 h-4 text-indigo-400" /> Waypoints ({trip.route.waypoints.length})
-              </h2>
-              <div className="space-y-1.5 text-sm text-slate-300">
-                {trip.route.waypoints.map((w, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className={`h-6 w-6 shrink-0 rounded-full text-[10px] font-bold flex items-center justify-center ${i === 0 ? 'bg-emerald-600' : i === trip.route.waypoints.length - 1 ? 'bg-rose-600' : 'bg-indigo-600'} text-white`}>
-                      {i === 0 ? 'S' : i === trip.route.waypoints.length - 1 ? 'E' : i + 1}
-                    </span>
-                    <span className="font-medium text-white">{w.name}</span>
-                    {w.lat != null && <span className="text-[10px] text-slate-500 ml-auto">{w.lat.toFixed(4)}, {w.lng.toFixed(4)}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
       )}
     </div>
   );

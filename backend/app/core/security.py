@@ -1,9 +1,8 @@
 """
-Security helpers (Phase 3).
+Security, password hashing, and authentication utilities.
 
 Password hashing uses bcrypt; session tokens are signed JWTs delivered through
-an HttpOnly cookie named `access_token`. A `get_current_user` dependency reads
-the cookie (or a Bearer header fallback) and resolves the authenticated user.
+an HttpOnly cookie named `access_token` (with Bearer header fallback).
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -14,13 +13,13 @@ from fastapi import Depends, HTTPException, Request, status
 from jwt import PyJWTError
 from sqlalchemy.orm import Session
 
-from app.core import settings
-from app.database import get_db
-from app.models.orm import User
+from app.core import config
+from app.core.database import get_db
+from app.models.user import User
 
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password with bcrypt (includes a salt)."""
+    """Hash a plaintext password with bcrypt (includes salt)."""
     return bcrypt.hashpw(
         password.encode("utf-8"), bcrypt.gensalt()
     ).decode("utf-8")
@@ -42,16 +41,16 @@ def create_access_token(user_id: int) -> str:
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+        "exp": now + timedelta(minutes=config.JWT_EXPIRE_MINUTES),
     }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> Optional[int]:
     """Decode a JWT and return the user id, or None when invalid/expired."""
     try:
         payload = jwt.decode(
-            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+            token, config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM]
         )
         return int(payload["sub"])
     except (PyJWTError, KeyError, ValueError):
@@ -62,7 +61,7 @@ def get_current_user(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
     """FastAPI dependency returning the authenticated user (401 otherwise)."""
-    token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    token = request.cookies.get(config.AUTH_COOKIE_NAME)
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
@@ -90,15 +89,31 @@ def get_current_user(
     return user
 
 
+def get_optional_current_user(
+    request: Request, db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Like get_current_user but returns None instead of raising 401.
+
+    Used by endpoints that work for anonymous visitors (e.g. recommendations)
+    but can personalise results when a valid session cookie is present.
+    """
+    try:
+        return get_current_user(request, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
+
+
 def set_auth_cookie(response, token: str) -> None:
     """Attach the JWT to the response as an HttpOnly cookie."""
     response.set_cookie(
-        key=settings.AUTH_COOKIE_NAME,
+        key=config.AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.COOKIE_SECURE,
+        secure=config.COOKIE_SECURE,
         samesite="lax",
-        max_age=settings.JWT_EXPIRE_MINUTES * 60,
+        max_age=config.JWT_EXPIRE_MINUTES * 60,
         path="/",
     )
 
@@ -106,6 +121,6 @@ def set_auth_cookie(response, token: str) -> None:
 def clear_auth_cookie(response) -> None:
     """Expire the auth cookie so the client session ends."""
     response.delete_cookie(
-        key=settings.AUTH_COOKIE_NAME,
+        key=config.AUTH_COOKIE_NAME,
         path="/",
     )

@@ -30,26 +30,28 @@ function MapController({ leafletMapRef, fitSignal, fitWaypoints }) {
 }
 
 function createNumberedMarkerIcon(number, isStart, isEnd, isActive) {
-  let bgColor = '#4f46e5';
+  let bgColor = '#059669';
   let badgeText = `#${number}`;
 
   if (isStart) {
-    bgColor = '#059669';
+    bgColor = '#10b981';
     badgeText = 'START';
   } else if (isEnd) {
-    bgColor = '#e11d48';
+    bgColor = '#c96f4e';
     badgeText = 'END';
   }
 
-  const activeClass = isActive ? 'box-shadow:0 0 0 3px rgba(255,255,255,.9), 0 8px 20px rgba(0,0,0,.45); transform:scale(1.15);' : 'box-shadow:0 4px 12px rgba(0,0,0,.4);';
+  const activeClass = isActive
+    ? 'box-shadow:0 0 0 3px rgba(16,185,129,.9), 0 8px 24px rgba(0,0,0,.6); transform:scale(1.12);'
+    : 'box-shadow:0 4px 12px rgba(0,0,0,.45);';
   const ping = isActive
-    ? '<span style="position:absolute;inset:-8px;border-radius:12px;background:rgba(99,102,241,.35);animation:smarttour-marker-ping 1.6s ease-out infinite;"></span>'
+    ? '<span style="position:absolute;inset:-8px;border-radius:12px;background:rgba(16,185,129,.35);animation:smarttour-marker-ping 1.6s ease-out infinite;"></span>'
     : '';
 
   const html = `
     <div style="position:relative;">
       ${ping}
-      <div style="position:relative;${bgColor ? `background:${bgColor};` : ''}color:white;font-weight:900;font-size:11px;padding:3px 8px;border-radius:10px;border:2px solid white;display:flex;align-items:center;gap:4px;white-space:nowrap;${activeClass}">
+      <div style="position:relative;background:${bgColor};color:white;font-weight:800;font-size:11px;padding:3px 8px;border-radius:8px;border:2px solid #0d1a17;display:flex;align-items:center;gap:4px;white-space:nowrap;${activeClass}">
         <span>${badgeText}</span>
       </div>
     </div>
@@ -65,7 +67,7 @@ function createNumberedMarkerIcon(number, isStart, isEnd, isActive) {
 
 function createPlaceMarkerIcon() {
   const dot =
-    '<div style="width:14px;height:14px;border-radius:9999px;background:#6366f1;border:3px solid #fff;box-shadow:0 2px 8px rgba(99,102,241,.65);"></div>';
+    '<div style="width:14px;height:14px;border-radius:9999px;background:#10b981;border:2.5px solid #0d1a17;box-shadow:0 2px 8px rgba(16,185,129,.7);"></div>';
   return L.divIcon({
     html: dot,
     className: 'custom-leaflet-marker',
@@ -265,12 +267,22 @@ const MapView = forwardRef(function MapView(
                 {place.description && (
                   <p className="text-[11px] text-slate-600 line-clamp-2">{place.description}</p>
                 )}
-                <div className="flex items-center gap-2 text-[10px] text-slate-500 pt-1">
-                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-700">
+                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 pt-1">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
                     {place.category || 'Tourist'}
                   </span>
                   {place.rating ? <span>⭐ {place.rating}</span> : null}
                 </div>
+                {(place.slug || place.id) && (
+                  <div className="pt-1 border-t border-slate-100">
+                    <a
+                      href={place.category === 'Destination' || place.isDestination ? `/destinations/${place.slug || place.id}` : `/places/${place.slug || place.id}`}
+                      className="inline-block text-[11px] font-bold text-emerald-600 hover:text-emerald-700"
+                    >
+                      {place.category === 'Destination' || place.isDestination ? 'Explore Destination →' : 'View Attraction Details →'}
+                    </a>
+                  </div>
+                )}
               </div>
             </Popup>
           </Marker>

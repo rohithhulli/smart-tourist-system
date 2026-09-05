@@ -70,6 +70,10 @@ IMG_FOOD = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=fo
 IMG_GREEN_TEMPLE = "https://images.unsplash.com/photo-1600100397608-f010e423b971?auto=format&fit=crop&w=800&q=80"
 IMG_WILDLIFE = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80"
 IMG_CITY = "https://images.unsplash.com/photo-1444723121867-7a241cacace9?auto=format&fit=crop&w=800&q=80"
+IMG_GARDEN = "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=800&q=80"
+IMG_TREK = "https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=800&q=80"
+IMG_MOSQUE = "https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=800&q=80"
+IMG_DEFAULT = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
 
 
 TOURIST_PLACES = [
@@ -110,7 +114,7 @@ TOURIST_PLACES = [
         12.4250, 76.5770, 4.7, 100,
         ["Garden", "Fountain", "Nature", "Photography", "Lake", "Light show"],
         ["Fountain show", "Boat ride", "Garden walk", "Photography"],
-        "October to March", "6:30 AM", "8:30 PM", IMG_NATURE, 85,
+        "October to March", "6:30 AM", "8:30 PM", IMG_GARDEN, 85,
     ),
     _place(
         "ranganathittu-bird-sanctuary", "Ranganathittu Bird Sanctuary", "Srirangapatna", "Wildlife",
@@ -221,7 +225,7 @@ TOURIST_PLACES = [
         12.9507, 77.5850, 4.7, 50,
         ["Garden", "Nature", "Botanical", "Flowers", "Walking", "Green"],
         ["Garden walk", "Flower show visit", "Bonsai viewing", "Photography"],
-        "October to February", "6:00 AM", "7:00 PM", IMG_NATURE, 88,
+        "October to February", "6:00 AM", "7:00 PM", IMG_GARDEN, 88,
     ),
     _place(
         "cubbon-park", "Cubbon Park", "Bengaluru", "Garden",
@@ -230,7 +234,7 @@ TOURIST_PLACES = [
         12.9780, 77.5940, 4.6, 0,
         ["Park", "Nature", "Walking", "Green", "Relaxation", "Gardens"],
         ["Morning jog", "Reading", "Photography", "Nature walk"],
-        "Throughout the year", "5:00 AM", "8:00 PM", IMG_NATURE, 80,
+        "Throughout the year", "5:00 AM", "8:00 PM", IMG_GARDEN, 80,
     ),
     _place(
         "bannerghatta-national-park", "Bannerghatta Biological Park", "Bengaluru", "Wildlife",
@@ -443,7 +447,7 @@ TOURIST_PLACES = [
         13.3890, 75.7220, 4.7, 50,
         ["Trekking", "Mountain", "Hill", "Sunrise", "Adventure", "Nature"],
         ["Trek to summit", "Sunrise watching", "Photography", "Camping"],
-        "October to February", "6:00 AM", "6:00 PM", IMG_MOUNTAIN, 85,
+        "October to February", "6:00 AM", "6:00 PM", IMG_TREK, 85,
     ),
     _place(
         "baba-budangiri", "Baba Budangiri & Dattatreya Peetha", "Chikkamagaluru", "Heritage",
@@ -479,7 +483,7 @@ TOURIST_PLACES = [
         13.3500, 75.7700, 4.6, 50,
         ["Trekking", "Viewpoint", "Adventure", "Nature", "Cliff", "Panorama"],
         ["Trekking", "Sunrise viewing", "Photography"],
-        "October to February", "6:00 AM", "6:00 PM", IMG_MOUNTAIN, 69,
+        "October to February", "6:00 AM", "6:00 PM", IMG_TREK, 69,
     ),
     _place(
         "kalhatti-falls", "Kalhatti Falls", "Chikkamagaluru", "Waterfall",
@@ -665,7 +669,7 @@ TOURIST_PLACES = [
         12.7220, 75.2470, 4.8, 200,
         ["Trekking", "Mountain", "Adventure", "Wildlife", "Forest", "Summit"],
         ["Summit trek", "Camping", "Bird watching", "Photography"],
-        "October to February", "6:00 AM", "6:00 PM", IMG_MOUNTAIN, 66,
+        "October to February", "6:00 AM", "6:00 PM", IMG_TREK, 66,
     ),
     # ------------------------------------------------------------------
     # NORTH KARNATAKA HERITAGE
@@ -761,7 +765,7 @@ TOURIST_PLACES = [
         13.5090, 75.0950, 4.6, 50,
         ["Rainforest", "Trekking", "Nature", "Biodiversity", "Sunset", "Monsoon"],
         ["Sunset viewing", "Trek", "Snake spotting", "Bird watching"],
-        "June to February", "6:00 AM", "7:00 PM", IMG_NATURE, 72,
+        "June to February", "6:00 AM", "7:00 PM", IMG_TREK, 72,
     ),
     _place(
         "sakleshpur-green-route", "Sakleshpur Green Route Trek", "Sakleshpur", "Trekking",
@@ -770,7 +774,7 @@ TOURIST_PLACES = [
         12.9417, 75.7847, 4.5, 100,
         ["Trekking", "Railway", "Forest", "Tunnels", "Nature", "Adventure"],
         ["Railway trek", "Tunnel exploration", "Camping", "Photography"],
-        "October to February", "6:00 AM", "6:00 PM", IMG_MOUNTAIN, 70,
+        "October to February", "6:00 AM", "6:00 PM", IMG_TREK, 70,
     ),
     _place(
         "gokarna-om-beach", "Om Beach, Gokarna", "Gokarna", "Beach",
@@ -989,7 +993,7 @@ TOURIST_PLACES = [
         13.1711, 77.2378, 4.5, 0,
         ["Trekking", "Hill", "Temple", "Spiritual", "Panorama"],
         ["Hill climb", "Temple darshan", "Photography"],
-        "October to March", "6:00 AM", "7:00 PM", IMG_MOUNTAIN, 45,
+        "October to March", "6:00 AM", "7:00 PM", IMG_TREK, 45,
     ),
 ]
 
@@ -999,8 +1003,11 @@ def get_all_places():
 
 
 def get_place_by_id(place_id):
+    if not place_id:
+        return None
+    target = str(place_id).strip().lower()
     for place in TOURIST_PLACES:
-        if place["id"] == place_id:
+        if str(place.get("id", "")).strip().lower() == target or str(place.get("name", "")).strip().lower() == target:
             return place
     return None
 

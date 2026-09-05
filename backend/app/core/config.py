@@ -1,42 +1,108 @@
 """
-Application configuration for the Smart Tourist recommendation engine.
+Application configuration and environment settings.
 
-Centralises tunable weights and defaults so the recommendation behaviour can
-be adjusted without touching the ML logic.
+Centralises environment variables, tunable recommendation weights,
+and system constants.
 """
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# ---- Recommendation score weights (must sum to 1.0) ----
-# final_score = w_content * content_similarity
-#             + w_quality * quality_score
-#             + w_budget  * budget_score
-#             + w_distance * distance_score
+# Load .env from backend root directory
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BACKEND_DIR / ".env")
+
+_WEAK_SECRETS = {"change-this-development-secret"}
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name: str, default: list) -> list:
+    value = os.getenv(name)
+    if not value:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+# --- Database & Auth Settings ---
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./smarttourist.db")
+JWT_SECRET = os.getenv("JWT_SECRET", "change-this-development-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "10080"))  # 7 days default
+
+if JWT_SECRET in _WEAK_SECRETS:
+    import warnings
+
+    warnings.warn(
+        "JWT_SECRET is set to a known weak default. Set a strong random "
+        "secret in backend/.env before deploying (see .env.example)."
+    )
+
+# Allowed CORS origins
+FRONTEND_ORIGINS = _env_list(
+    "FRONTEND_ORIGIN",
+    ["http://localhost:5173", "http://127.0.0.1:5173"],
+)
+
+COOKIE_SECURE = _env_bool("COOKIE_SECURE", default=False)
+AUTH_COOKIE_NAME = "access_token"
+
+# Public Overpass (OSM) endpoints
+OVERPASS_URLS = _env_list(
+    "OVERPASS_URLS",
+    [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    ],
+)
+
+# --- Recommendation ML Weights & Parameters ---
+# Hybrid scoring formula (v2 — Phase 1 engine upgrade):
+#
+#   final = 0.35  * content          (TF-IDF cosine similarity, still dominant)
+#         + 0.15  * quality          (normalised rating + popularity)
+#         + 0.15  * budget           (per-day per-person cost fit)
+#         + 0.10  * distance         (proximity to destination)
+#         + 0.10  * category         (interest -> dataset category/tag match)
+#         + 0.075 * traveler         (traveler-type suitability)
+#         + 0.075 * personalization  (deterministic profile from favorites/trips)
+#
+# Weights sum to exactly 1.0. TF-IDF content remains the single largest
+# signal; the three new signals are deliberately conservative. When an
+# input is absent, its component becomes a documented constant:
+#   * no interests selected      -> content = 0 and category = 0
+#   * no traveler_type specified -> traveler = NEUTRAL_TRAVELER_SCORE (0.5)
+#   * no user history            -> personalization = NEUTRAL_PREFERENCE_SCORE (0.5)
 WEIGHTS = {
-    "content": 0.50,    # user-interest match (TF-IDF cosine similarity)
-    "quality": 0.20,    # normalised rating + popularity
-    "budget": 0.20,     # fit of estimated cost to per-day per-person budget
-    "distance": 0.10,   # geographic proximity to the destination
+    "content": 0.35,
+    "quality": 0.15,
+    "budget": 0.15,
+    "distance": 0.10,
+    "category": 0.10,
+    "traveler": 0.075,
+    "personalization": 0.075,
 }
 
-# Distance decay (km) used by distance_score = exp(-distance_km / DISTANCE_DECAY)
 DISTANCE_DECAY = 60.0
-
-# Per-location grouping: how far (km) from a trip stop we consider places to
-# be "relevant" to that stop, and how many to return for each location.
 LOCATION_RADIUS_KM = 80.0
 LOCATION_TOP_N = 8
 
-# Defaults used when a request omits a field
 DEFAULT_DURATION_DAYS = 3
 DEFAULT_TRAVELERS = 2
 DEFAULT_BUDGET = 10000
 DEFAULT_TOP_N = 12
 MAX_TOP_N = 30
 
-# How many places we may schedule per day in an itinerary
 MIN_PLACES_PER_DAY = 1
 MAX_PLACES_PER_DAY = 4
 
-# Budget band thresholds (per day per person, INR) used for the budget label
 BUDGET_BANDS = [
     ("budget", 1500),
     ("moderate", 4000),
@@ -44,10 +110,8 @@ BUDGET_BANDS = [
     ("luxury", float("inf")),
 ]
 
-# User-Agent used for outbound geocoding calls
 GEOCODING_USER_AGENT = "SmartTouristSystem/1.0"
 
-# Known Karnataka city coordinates (authoritative, avoids flaky network lookups)
 CITY_COORDS = {
     "mysuru": (12.2958, 76.6394),
     "mysore": (12.2958, 76.6394),
@@ -104,7 +168,6 @@ CITY_COORDS = {
     "honnavara": (14.2800, 74.4500),
     "kumta": (14.4300, 74.4000),
     "sirsi": (14.6200, 74.8500),
-    "kundapura": (13.7820, 74.6390),
     "ankola": (14.6600, 74.3000),
     "gadag": (15.4298, 75.6298),
     "haveri": (14.7948, 75.3987),

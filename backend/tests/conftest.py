@@ -6,6 +6,10 @@ A throwaway SQLite database is used so tests never touch the real
 built against the test database.
 """
 import os
+import sys
+
+# Ensure backend root is on sys.path regardless of where pytest is executed
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_smarttourist.db"
 os.environ["JWT_SECRET"] = "test-only-secret-not-for-production"
@@ -45,4 +49,15 @@ def signup(client, email="tester@example.com", name="Test User", password="Stron
     return client.post(
         "/api/auth/signup",
         json={"name": name, "email": email, "password": password},
+    )
+
+
+def signup_and_login(
+    client, email="tester@example.com", name="Test User", password="Strong@123"
+):
+    """Create the account and authenticate (signup no longer issues a session)."""
+    signup(client, email=email, name=name, password=password)
+    return client.post(
+        "/api/auth/login",
+        json={"email": email, "password": password},
     )

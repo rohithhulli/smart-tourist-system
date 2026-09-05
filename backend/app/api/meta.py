@@ -1,38 +1,4 @@
-"""
-Real system statistics for the dashboard (Phase 1 hardening).
+"""Meta API compatibility shim."""
+from app.routers.meta import router
 
-Returns figures computed from the actual dataset and database so the UI never
-displays fabricated numbers.
-"""
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from app.data.tourist_places import get_all_places
-from app.database import get_db
-from app.models.orm import Favorite, Trip, User
-
-router = APIRouter(prefix="/api/meta", tags=["meta"])
-
-
-@router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
-    places = get_all_places()
-    cities = {p.get("city") for p in places if p.get("city")}
-    states = {p.get("state") for p in places if p.get("state")}
-    categories = {p.get("category") for p in places if p.get("category")}
-    rated = [p["rating"] for p in places if p.get("rating")]
-    avg_rating = round(sum(rated) / len(rated), 2) if rated else None
-
-    return {
-        "status": "success",
-        "data": {
-            "total_places": len(places),
-            "total_cities": len(cities),
-            "total_states": len(states),
-            "total_categories": len(categories),
-            "avg_rating": avg_rating,
-            "users": db.query(User).count(),
-            "trips": db.query(Trip).count(),
-            "favorites": db.query(Favorite).count(),
-        },
-    }
+__all__ = ["router"]
